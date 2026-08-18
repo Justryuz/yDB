@@ -12,6 +12,22 @@ python -m http.server 8080
 http://localhost:8080
 ```
 
+**Custom port** — use any port you want:
+```bash
+python -m http.server 3000      # Port 3000
+python -m http.server 9090      # Port 9090
+python -m http.server 80        # Standard HTTP (may need admin/sudo)
+```
+
+**Other servers:**
+```bash
+npx serve -l 8080               # Node.js
+php -S localhost:8080            # PHP
+nginx / apache                  # Production (point root to ydb/ folder)
+```
+
+> yDB is a pure static site — no backend required. Any web server that serves HTML/CSS/JS will work.
+
 **Login:** `admin` / `password`
 
 ## Features
