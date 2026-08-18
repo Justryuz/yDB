@@ -112,16 +112,35 @@ const mongoClient = {
 // ── MSSQL ─────────────────────────────────────────────────
 const mssqlClient = {
     async testConnection(opts) {
-        const { Connection, Request } = require('tedious');
-        return new Promise((resolve) => {
-            const conn = new Connection({ server: opts.host, options: { port: opts.port, database: opts.database, encrypt: false, trustServerCertificate: true }, authentication: { type: 'default', options: { userName: opts.user, password: opts.password } } });
-            conn.on('connect', (err) => { conn.close(); resolve(!err); });
-            conn.on('error', () => resolve(false));
-            conn.connect();
-        });
+        const sql = require('mssql');
+        try {
+            const pool = await sql.connect({ server: opts.host, port: opts.port, database: opts.database, user: opts.user, password: opts.password, options: { encrypt: false, trustServerCertificate: true }, connectionTimeout: 5000 });
+            await pool.close();
+            return true;
+        } catch { return false; }
     },
-    async execute(opts, sql) { return { columns: [], data: [], duration: 0, rowCount: 0, error: 'MSSQL execute: use tedious driver' }; },
-    async getSchemas(opts) { return { tables: {} }; }
+    async execute(opts, sqlText) {
+        const sql = require('mssql');
+        const pool = await sql.connect({ server: opts.host, port: opts.port, database: opts.database, user: opts.user, password: opts.password, options: { encrypt: false, trustServerCertificate: true } });
+        try {
+            const start = Date.now();
+            const result = await pool.request().query(sqlText);
+            return { columns: result.recordset.columns ? Object.keys(result.recordset.columns) : (result.recordset.length ? Object.keys(result.recordset[0]) : []), data: result.recordset, duration: Date.now() - start, rowCount: result.recordset.length };
+        } finally { await pool.close(); }
+    },
+    async getSchemas(opts) {
+        const sql = require('mssql');
+        const pool = await sql.connect({ server: opts.host, port: opts.port, database: opts.database, user: opts.user, password: opts.password, options: { encrypt: false, trustServerCertificate: true } });
+        try {
+            const tables = await pool.request().query("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'");
+            const schema = { tables: {} };
+            for (const row of tables.recordset) {
+                const cols = await pool.request().query(`SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='${row.TABLE_NAME}'`);
+                schema.tables[row.TABLE_NAME] = { columns: cols.recordset.map(c => ({ name: c.COLUMN_NAME, type: c.DATA_TYPE.toUpperCase(), nullable: c.IS_NULLABLE === 'YES', key: '' })) };
+            }
+            return schema;
+        } finally { await pool.close(); }
+    }
 };
 
 // ── Redis ─────────────────────────────────────────────────
