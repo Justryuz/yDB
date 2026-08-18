@@ -59,7 +59,7 @@ YDB.Explorer = {
         }
 
         // No mock data — try fetching from API
-        if (YDB.API.isOnline()) {
+        if (YDB.API.isOnline() && YDB.API.token) {
             container.innerHTML = '<p class="text-base-content/50 text-sm"><span class="loading loading-spinner loading-xs"></span> Loading schema...</p>';
             YDB.API.get('/explorer/' + conn.id + '/schema').then(function (schema) {
                 // Cache in mock data for subsequent renders
@@ -145,7 +145,7 @@ YDB.Explorer = {
         }
 
         // Fetch from API
-        if (YDB.API.isOnline()) {
+        if (YDB.API.isOnline() && YDB.API.token) {
             YDB.API.get('/explorer/' + conn.id + '/tables/' + name + '/data?perPage=100').then(function (result) {
                 // Cache data in schema
                 if (!schema) { schema = { name: conn.database, tables: {} }; YDB.MockData.schemas[conn.id] = schema; }

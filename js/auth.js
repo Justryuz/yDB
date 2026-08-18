@@ -66,11 +66,12 @@ YDB.Auth = {
                 self.showSplashThenApp();
             })
             .catch(function (err) {
-                // If API is down, fallback to mock credentials
                 if (err.status === 401 || err.status === 403) {
-                    YDB.UI.toast('Invalid credentials', 'error');
+                    // Real auth rejection from backend
+                    YDB.UI.toast(err.message || 'Invalid credentials', 'error');
                 } else {
-                    // API unreachable — use mock mode
+                    // Backend error or unreachable — fallback to mock
+                    console.log('[Auth] API unavailable, using mock mode:', err.message);
                     self._mockLogin(username, password);
                 }
             });

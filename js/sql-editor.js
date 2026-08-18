@@ -27,7 +27,7 @@ YDB.SQLEditor = {
         var conn = YDB.State.activeConnection;
 
         // Use real API if online and connection selected
-        if (YDB.API.isOnline() && conn && conn.id) {
+        if (YDB.API.isOnline() && YDB.API.token && conn && conn.id) {
             YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
                 .then(function (result) {
                     if (!result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }

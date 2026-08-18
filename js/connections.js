@@ -31,7 +31,7 @@ YDB.Connections = {
      */
     render: function () {
         var self = this;
-        if (YDB.API.isOnline()) {
+        if (YDB.API.isOnline() && YDB.API.token) {
             YDB.API.get('/connections').then(function (conns) {
                 YDB.State.connections = conns.map(function (c) {
                     return { id: c.id, name: c.name, type: c.db_type, host: c.host, port: c.port, username: c.username, password: '', database: c.database_name };
@@ -147,7 +147,7 @@ YDB.Connections = {
             YDB.UI.toast('Connection saved', 'success');
         };
 
-        if (YDB.API.isOnline()) {
+        if (YDB.API.isOnline() && YDB.API.token) {
             var req = editId ? YDB.API.put('/connections/' + editId, data) : YDB.API.post('/connections', data);
             req.then(done).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
         } else {
@@ -182,7 +182,7 @@ YDB.Connections = {
         var connId = document.getElementById('conn-edit-id').value;
         YDB.UI.toast('Testing connection...', 'info');
 
-        if (YDB.API.isOnline() && connId) {
+        if (YDB.API.isOnline() && YDB.API.token && connId) {
             YDB.API.post('/connections/' + connId + '/test', {}).then(function (res) {
                 YDB.UI.toast(res.message, res.success ? 'success' : 'error');
             }).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
