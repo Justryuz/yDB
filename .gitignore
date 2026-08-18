@@ -12,3 +12,10 @@ desktop.ini
 # Temp
 *.log
 *.tmp
+
+# Node
+node_modules/
+server/node_modules/
+
+# Environment
+.env

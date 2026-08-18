@@ -1,0 +1,77 @@
+/**
+ * @file routes/query.js
+ * @description Execute SQL queries against user's saved connections.
+ */
+
+const express = require('express');
+const crypto = require('crypto');
+const router = express.Router();
+const db = require('../db/pool');
+const config = require('../config');
+const { authenticate } = require('../middleware/auth');
+const { getClient } = require('../services/db-clients');
+
+router.use(authenticate);
+
+function decrypt(text) {
+    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+    const [ivHex, encrypted] = text.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+
+/**
+ * POST /api/query/execute
+ * Body: { connectionId, sql }
+ */
+router.post('/execute', async (req, res) => {
+    try {
+        const { connectionId, sql } = req.body;
+        if (!connectionId || !sql) {
+            return res.status(400).json({ error: 'connectionId and sql required' });
+        }
+
+        // Get connection details
+        const connResult = await db.query(
+            'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
+            [connectionId, req.user.id]
+        );
+        if (!connResult.rows.length) {
+            return res.status(404).json({ error: 'Connection not found' });
+        }
+
+        const conn = connResult.rows[0];
+        const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        const client = getClient(conn.db_type);
+
+        // Execute query
+        const result = await client.execute(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
+            sql
+        );
+
+        // Log to audit
+        await db.query(
+            'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
+            [req.user.id, connectionId, sql, result.error ? 'error' : 'success', result.duration || 0, result.rowCount || 0]
+        );
+
+        if (result.error) {
+            return res.status(400).json({ error: result.error });
+        }
+
+        res.json({
+            columns: result.columns,
+            data: result.data,
+            duration: result.duration,
+            rowCount: result.rowCount
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+module.exports = router;

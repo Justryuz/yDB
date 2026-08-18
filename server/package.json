@@ -1,0 +1,47 @@
+{
+  "name": "ydb-server",
+  "version": "1.0.0",
+  "description": "yDB - Tame any database. Production backend.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "db:init": "node db/init.js",
+    "db:seed": "node db/seed.js"
+  },
+  "dependencies": {
+    "express": "4.18.2",
+    "cors": "2.8.5",
+    "helmet": "7.1.0",
+    "morgan": "1.10.0",
+    "compression": "1.7.4",
+    "dotenv": "16.3.1",
+    "bcryptjs": "2.4.3",
+    "jsonwebtoken": "9.0.2",
+    "pg": "8.11.3",
+    "mysql2": "3.6.5",
+    "better-sqlite3": "9.4.3",
+    "mongodb": "6.3.0",
+    "tedious": "16.7.1",
+    "oracledb": "6.3.0",
+    "ioredis": "5.3.2",
+    "cassandra-driver": "4.7.2",
+    "neo4j-driver": "5.16.0",
+    "influx": "5.9.3",
+    "snowflake-sdk": "1.9.0",
+    "@clickhouse/client": "0.2.6",
+    "express-rate-limit": "7.1.4",
+    "express-validator": "7.0.1",
+    "multer": "1.4.5-lts.1",
+    "csv-parse": "5.5.3",
+    "xlsx": "0.18.5",
+    "uuid": "9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

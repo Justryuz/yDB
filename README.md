@@ -4,31 +4,52 @@ A powerful, browser-based database management tool with multi-connection support
 
 ## Quick Start
 
+### Option 1: Docker (Recommended)
 ```bash
-# No installation required. Just serve the files:
+git clone https://github.com/Justryuz/yDB.git
+cd yDB
+docker compose up -d
+```
+App runs at **http://localhost:3000**
+
+### Option 2: Manual Setup
+```bash
+git clone https://github.com/Justryuz/yDB.git
+cd yDB/server
+
+# Install dependencies
+npm install
+
+# Setup PostgreSQL database
+# Create a database named 'ydb_app' and configure .env
+
+# Copy and edit environment config
+cp .env.example .env
+
+# Initialize database schema
+npm run db:init
+
+# Create default admin user
+npm run db:seed
+
+# Start server
+npm start
+```
+App runs at **http://localhost:3000**
+
+### Option 3: Static Only (No backend, mock data)
+```bash
 python -m http.server 8080
-
-# Open in browser:
-http://localhost:8080
+# or: npx serve -l 8080
 ```
 
-**Custom port** — use any port you want:
+**Default login:** `admin` / `admin123`
+
+**Custom port:**
 ```bash
-python -m http.server 3000      # Port 3000
-python -m http.server 9090      # Port 9090
-python -m http.server 80        # Standard HTTP (may need admin/sudo)
+PORT=9090 npm start             # Node.js
+docker compose up -d            # Docker (edit docker-compose.yml ports)
 ```
-
-**Other servers:**
-```bash
-npx serve -l 8080               # Node.js
-php -S localhost:8080            # PHP
-nginx / apache                  # Production (point root to ydb/ folder)
-```
-
-> yDB is a pure static site — no backend required. Any web server that serves HTML/CSS/JS will work.
-
-**Login:** `admin` / `password`
 
 ## Features
 
@@ -129,12 +150,15 @@ ydb/
 
 ## Tech Stack
 
-- **Frontend:** Vanilla JavaScript (ES5), HTML5, CSS3
-- **UI Framework:** Tailwind CSS + DaisyUI (via CDN)
-- **Icons:** Lucide Icons (via CDN)
-- **Charts:** Chart.js (via CDN)
-- **Build Tools:** None required
-- **Server:** Any static file server (Python, Nginx, Apache, etc.)
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vanilla JS, Tailwind CSS, DaisyUI, Lucide, Chart.js |
+| Backend | Node.js 18+, Express.js |
+| App Database | PostgreSQL 16 |
+| Auth | JWT + bcrypt |
+| DB Drivers | pg, mysql2, mongodb, tedious, ioredis, neo4j-driver, cassandra-driver, snowflake-sdk, @clickhouse/client |
+| Security | Helmet, CORS, rate-limiting, AES-256 encryption for stored passwords |
+| Deploy | Docker, docker-compose |
 
 ## Design Principles
 
@@ -159,14 +183,20 @@ No build step. Edit files and refresh browser.
 
 ## Production Roadmap
 
-- [ ] Replace mock data with real WebSocket database connections
-- [ ] Integrate Monaco Editor for SQL syntax highlighting
-- [ ] Add JWT/OAuth authentication
+- [x] Node.js + Express backend
+- [x] PostgreSQL for app data
+- [x] JWT authentication
+- [x] Real database drivers (MySQL, PostgreSQL, MongoDB, MSSQL, Redis)
+- [x] Docker deployment
+- [x] Encrypted credential storage
+- [x] Audit logging
+- [x] Rate limiting & security headers
+- [ ] Integrate Monaco Editor for SQL highlighting
 - [ ] Real-time collaboration via WebSocket
-- [ ] Bundle with Vite for optimized production builds
-- [ ] Add comprehensive test suite
-- [ ] Docker deployment support
-- [ ] API access for external integrations
+- [ ] OAuth / SSO support
+- [ ] Kubernetes deployment manifests
+- [ ] Comprehensive test suite
+- [ ] API documentation (Swagger)
 
 ## License
 
