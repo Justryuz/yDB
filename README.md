@@ -30,8 +30,6 @@ http://localhost:8080
 - **Data Masking** — Auto-mask sensitive columns (passwords, emails)
 
 ### Visualization & Reporting
-- **ERD** — Auto-generate entity relationship diagrams
-- **Dashboard** — Pin charts and query widgets
 - **Query Templates** — Pre-built patterns (Top N, Duplicates, Aggregations)
 
 ### Administration
@@ -156,7 +154,7 @@ No build step. Edit files and refresh browser.
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
