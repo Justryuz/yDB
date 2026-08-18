@@ -46,18 +46,40 @@ YDB.Explorer = {
     },
 
     renderTree: function () {
+        var self = this;
         var conn = YDB.State.activeConnection;
         var container = document.getElementById('tree-container');
         if (!conn) { container.innerHTML = '<p class="text-base-content/50 text-sm">Select a connection</p>'; return; }
 
+        // Check mock data first
         var schema = YDB.MockData.schemas[conn.id];
-        if (!schema) { container.innerHTML = '<p class="text-base-content/50 text-sm">No schema for this connection</p>'; return; }
+        if (schema) {
+            self._renderTreeFromSchema(schema);
+            return;
+        }
 
+        // No mock data — try fetching from API
+        if (YDB.API.isOnline()) {
+            container.innerHTML = '<p class="text-base-content/50 text-sm"><span class="loading loading-spinner loading-xs"></span> Loading schema...</p>';
+            YDB.API.get('/explorer/' + conn.id + '/schema').then(function (schema) {
+                // Cache in mock data for subsequent renders
+                YDB.MockData.schemas[conn.id] = schema;
+                self._renderTreeFromSchema(schema);
+            }).catch(function (err) {
+                container.innerHTML = '<p class="text-error text-sm">Error: ' + err.message + '</p>';
+            });
+        } else {
+            container.innerHTML = '<p class="text-base-content/50 text-sm">No schema for this connection (offline mode)</p>';
+        }
+    },
+
+    _renderTreeFromSchema: function (schema) {
+        var container = document.getElementById('tree-container');
         var h = '';
         h += this._node('database', schema.name, 'database', true);
         h += '<div class="tree-children open">';
         // Tables
-        var tables = Object.keys(schema.tables);
+        var tables = Object.keys(schema.tables || {});
         h += this._node('folder', 'Tables (' + tables.length + ')', 'folder', true);
         h += '<div class="tree-children open">';
         tables.forEach(function (tn) {
@@ -96,38 +118,82 @@ YDB.Explorer = {
     },
 
     selectTable: function (name) {
+        var self = this;
         var conn = YDB.State.activeConnection;
         if (!conn) return;
-        var schema = YDB.MockData.schemas[conn.id];
-        if (!schema || !schema.tables[name]) return;
 
         YDB.State.activeTable = name;
-        var table = schema.tables[name];
 
-        // Header
-        document.getElementById('viewer-header').querySelector('span').textContent = name + ' (' + table.data.length + ' rows)';
+        // Enable toolbar buttons
+        document.getElementById('viewer-header').querySelector('span').textContent = name + ' (loading...)';
         document.querySelectorAll('#viewer-header [data-export]').forEach(function (b) { b.disabled = false; });
         document.getElementById('btn-edit-mode').disabled = false;
         document.getElementById('btn-view-ddl').disabled = false;
         document.getElementById('btn-view-struct').disabled = false;
         document.getElementById('btn-explain').disabled = false;
 
-        // Apply masking if enabled
-        var data = table.data;
-        var cols = table.columns.map(function (c) { return c.name; });
+        // Highlight in tree
+        document.querySelectorAll('#tree-container [data-table]').forEach(function (el) { el.classList.toggle('selected', el.dataset.table === name); });
+
+        // Get schema (cached in MockData after first load)
+        var schema = YDB.MockData.schemas[conn.id];
+
+        // If schema has data already (mock or previously fetched), render directly
+        if (schema && schema.tables[name] && schema.tables[name].data) {
+            self._renderTableData(name, schema.tables[name]);
+            return;
+        }
+
+        // Fetch from API
+        if (YDB.API.isOnline()) {
+            YDB.API.get('/explorer/' + conn.id + '/tables/' + name + '/data?perPage=100').then(function (result) {
+                // Cache data in schema
+                if (!schema) { schema = { name: conn.database, tables: {} }; YDB.MockData.schemas[conn.id] = schema; }
+                if (!schema.tables[name]) schema.tables[name] = { columns: [], data: [] };
+                schema.tables[name].data = result.data;
+                if (result.columns && result.columns.length) {
+                    schema.tables[name].columns = result.columns.map(function (c) { return typeof c === 'string' ? { name: c, type: '', nullable: true, key: '' } : c; });
+                }
+                self._renderTableData(name, schema.tables[name]);
+            }).catch(function (err) {
+                document.getElementById('data-viewer').innerHTML = '<p class="text-error text-sm m-4">' + err.message + '</p>';
+            });
+        } else if (schema && schema.tables[name]) {
+            self._renderTableData(name, schema.tables[name]);
+        } else {
+            document.getElementById('data-viewer').innerHTML = '<p class="text-base-content/40 text-sm m-4">No data available (offline)</p>';
+        }
+    },
+
+    /** @private Render table data into viewer */
+    _renderTableData: function (name, table) {
+        var data = table.data || [];
+        var cols = (table.columns || []).map(function (c) { return c.name || c; });
+
+        // Update header
+        document.getElementById('viewer-header').querySelector('span').textContent = name + ' (' + data.length + ' rows)';
+
+        if (!data.length) {
+            document.getElementById('data-viewer').innerHTML = '<p class="text-base-content/40 text-sm m-4">Table is empty</p>';
+            return;
+        }
+
+        // If no column metadata, derive from data
+        if (!cols.length && data.length) cols = Object.keys(data[0]);
+
+        // Apply masking
         if (YDB.Masking.enabled) {
             data = YDB.Masking.applyToData(cols, data);
         }
 
         // Render
-        var headers = table.columns.map(function (c) { return c.name + ' <span class="text-base-content/30 font-normal text-xs">' + c.type + '</span>'; });
+        var headers = (table.columns || []).map(function (c) {
+            return (c.name || c) + (c.type ? ' <span class="text-base-content/30 font-normal text-xs">' + c.type + '</span>' : '');
+        });
+        if (!headers.length) headers = cols;
+
         YDB.UI.renderTable('data-viewer', cols, headers, data);
-
-        // Apply filtering & sorting enhancement
         setTimeout(function () { YDB.Filtering.enhance('data-viewer'); }, 50);
-
-        // Highlight
-        document.querySelectorAll('#tree-container [data-table]').forEach(function (el) { el.classList.toggle('selected', el.dataset.table === name); });
     },
 
     clear: function () {
