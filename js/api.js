@@ -26,24 +26,31 @@ YDB.API = {
      * Initialize API — check if backend is available, restore token from storage.
      */
     init: function () {
-        this.token = localStorage.getItem('ydb-token') || null;
+        var stored = localStorage.getItem('ydb-token');
+        this.token = (stored && stored !== 'null') ? stored : null;
         this._checkOnline();
     },
 
     /**
      * Check if backend API is reachable.
-     * Sets this.online flag.
+     * Sets this.online flag. Silently fails if unreachable.
      */
     _checkOnline: function () {
         var self = this;
-        fetch(this.baseURL + '/auth/me', {
-            method: 'GET',
-            headers: this._headers()
-        }).then(function (res) {
-            self.online = res.status !== 502 && res.status !== 0;
-        }).catch(function () {
+        try {
+            fetch(this.baseURL + '/auth/me', {
+                method: 'GET',
+                headers: this._headers()
+            }).then(function (res) {
+                // If we get JSON back (not HTML), backend is online
+                var ct = res.headers.get('content-type') || '';
+                self.online = ct.indexOf('application/json') >= 0;
+            }).catch(function () {
+                self.online = false;
+            });
+        } catch (e) {
             self.online = false;
-        });
+        }
     },
 
     /**
@@ -156,6 +163,13 @@ YDB.API = {
      * @returns {Promise<Object>}
      */
     _handleResponse: function (res) {
+        var ct = res.headers.get('content-type') || '';
+        if (ct.indexOf('application/json') < 0) {
+            // Not JSON — backend probably not running
+            var err = new Error('Backend not available');
+            err.status = 0;
+            return Promise.reject(err);
+        }
         return res.json().then(function (data) {
             if (!res.ok) {
                 var err = new Error(data.error || 'Request failed');

@@ -22,16 +22,13 @@ YDB.Auth = {
             self.logout();
         });
 
-        // Check for existing token (API mode) or session (mock mode)
-        if (YDB.API.token) {
-            // Verify token is still valid
+        // Check for existing session — try API token first, then mock session
+        if (YDB.API.token && YDB.API.isOnline()) {
             YDB.API.get('/auth/me').then(function (user) {
-                YDB.API.online = true;
                 YDB.State.user = user.username;
                 self.showSplashThenApp();
             }).catch(function () {
                 YDB.API.clearToken();
-                // Fallback to mock session check
                 self._checkMockSession();
             });
         } else {
