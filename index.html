@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>yDB - Tame any database</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="assets/logo.png" type="image/png">
+</head>
+<body class="min-h-screen bg-base-200">
+
+    <!-- ===== LOGIN PAGE ===== -->
+    <section id="page-login" class="min-h-screen flex items-center justify-center">
+        <div class="card w-96 bg-base-100 shadow-xl">
+            <div class="card-body">
+                <div class="flex flex-col items-center mb-4">
+                    <img src="assets/logo.png" alt="YDB Logo" class="w-16 h-16 object-contain">
+                    <h1 class="text-2xl font-bold text-primary mt-2">YDB</h1>
+                    <p class="text-base-content/60 text-sm">Tame any database.</p>
+                </div>
+                <form id="form-login" autocomplete="off">
+                    <div class="form-control mb-3">
+                        <label class="label"><span class="label-text">Username</span></label>
+                        <input type="text" id="input-username" class="input input-bordered w-full" placeholder="admin" required>
+                    </div>
+                    <div class="form-control mb-5">
+                        <label class="label"><span class="label-text">Password</span></label>
+                        <input type="password" id="input-password" class="input input-bordered w-full" placeholder="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">
+                        <i data-lucide="log-in" class="w-4 h-4"></i> Sign In
+                    </button>
+                </form>
+                <p class="text-center text-xs text-base-content/40 mt-4">Demo: admin / password</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== SPLASH SCREEN ===== -->
+    <section id="page-splash" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-base-200">
+        <div class="text-center splash-content">
+            <img src="assets/logo.png" alt="YDB" class="w-72 h-72 object-contain mx-auto splash-logo">
+            <h1 class="text-3xl font-bold text-primary mt-4">YDB</h1>
+            <p class="text-base-content/50 text-sm mt-2">Tame any database.</p>
+            <div class="mt-6"><span class="loading loading-dots loading-md text-primary"></span></div>
+        </div>
+    </section>
+
+    <!-- ===== MAIN APP ===== -->
+    <section id="page-app" class="hidden h-screen flex flex-col" style="max-width:100vw;overflow:hidden;">
+
+        <!-- Navbar -->
+        <nav class="navbar bg-base-100 border-b border-base-300 px-4 shrink-0">
+            <div class="navbar-start">
+                <img src="assets/logo.png" alt="YDB" class="w-8 h-8 object-contain">
+                <span class="text-xl font-bold text-primary ml-2">YDB</span>
+            </div>
+            <div class="navbar-center">
+                <div class="tabs tabs-boxed bg-base-200 flex-wrap" id="main-tabs">
+                    <button class="tab tab-active" data-tab="explorer"><i data-lucide="folder-tree" class="w-4 h-4 mr-1"></i>Explorer</button>
+                    <button class="tab" data-tab="builder"><i data-lucide="blocks" class="w-4 h-4 mr-1"></i>Builder</button>
+                    <button class="tab" data-tab="editor"><i data-lucide="code" class="w-4 h-4 mr-1"></i>SQL</button>
+                    <button class="tab" data-tab="terminal"><i data-lucide="terminal" class="w-4 h-4 mr-1"></i>Terminal</button>
+                    <button class="tab" data-tab="templates"><i data-lucide="file-stack" class="w-4 h-4 mr-1"></i>Templates</button>
+                    <button class="tab" data-tab="compare"><i data-lucide="columns-2" class="w-4 h-4 mr-1"></i>Compare</button>
+                    <button class="tab" data-tab="saved"><i data-lucide="bookmark" class="w-4 h-4 mr-1"></i>Saved</button>
+                    <button class="tab" data-tab="import"><i data-lucide="upload" class="w-4 h-4 mr-1"></i>Import</button>
+                    <button class="tab" data-tab="history"><i data-lucide="history" class="w-4 h-4 mr-1"></i>History</button>
+                    <button class="tab" data-tab="admin"><i data-lucide="shield" class="w-4 h-4 mr-1"></i>Admin</button>
+                </div>
+            </div>
+            <div class="navbar-end gap-2">
+                <label class="swap swap-rotate btn btn-ghost btn-sm">
+                    <input type="checkbox" id="toggle-theme">
+                    <i data-lucide="sun" class="swap-on w-5 h-5"></i>
+                    <i data-lucide="moon" class="swap-off w-5 h-5"></i>
+                </label>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
+                        <i data-lucide="user" class="w-4 h-4"></i>
+                        <span id="display-user">admin</span>
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40 z-50">
+                        <li><a id="btn-logout"><i data-lucide="log-out" class="w-4 h-4"></i>Logout</a></li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <div class="flex flex-1 overflow-hidden">
+
+            <!-- Sidebar: Connections -->
+            <aside id="panel-sidebar" class="bg-base-100 flex flex-col" style="width:260px;min-width:160px;overflow:hidden;">
+                <div class="p-3 border-b border-base-300 flex items-center justify-between shrink-0">
+                    <span class="font-semibold text-sm">Connections</span>
+                    <button class="btn btn-ghost btn-xs" id="btn-add-conn" title="New Connection">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="overflow-y-auto flex-1 p-2" id="list-connections"></div>
+            </aside>
+            <div class="resize-handle-v" data-resize="panel-sidebar" data-dir="left"></div>
+
+            <!-- Tab Panels -->
+            <main class="flex-1 flex flex-col" style="min-width:0;overflow:hidden;">
+
+                <!-- Explorer Panel -->
+                <div id="tab-explorer" class="tab-panel active">
+                    <div id="panel-tree" class="overflow-y-auto p-3" style="width:300px;min-width:140px;">
+                        <div id="tree-container"><p class="text-base-content/50 text-sm">Select a connection to browse</p></div>
+                    </div>
+                    <div class="resize-handle-v" data-resize="panel-tree" data-dir="left"></div>
+                    <div class="flex-1 flex flex-col" style="min-width:0;overflow:hidden;">
+                        <div class="p-3 border-b border-base-300 flex items-center justify-between shrink-0" id="viewer-header">
+                            <span class="text-sm font-semibold text-base-content/60">No table selected</span>
+                            <div class="flex gap-1 flex-wrap">
+                                <button class="btn btn-ghost btn-xs" id="btn-edit-mode" disabled title="Edit Mode"><i data-lucide="pencil" class="w-3 h-3"></i>Edit</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-view-ddl" disabled title="Show DDL"><i data-lucide="file-code" class="w-3 h-3"></i>DDL</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-view-struct" disabled title="Structure"><i data-lucide="settings" class="w-3 h-3"></i>Structure</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-toggle-mask" title="Toggle Masking"><i data-lucide="eye-off" class="w-3 h-3"></i>Mask</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-explain" disabled title="Explain"><i data-lucide="activity" class="w-3 h-3"></i>Explain</button>
+                                <span class="mx-1 text-base-300">|</span>
+                                <button class="btn btn-ghost btn-xs" data-export="csv" disabled><i data-lucide="file-text" class="w-3 h-3"></i>CSV</button>
+                                <button class="btn btn-ghost btn-xs" data-export="json" disabled><i data-lucide="braces" class="w-3 h-3"></i>JSON</button>
+                                <button class="btn btn-ghost btn-xs" data-export="excel" disabled><i data-lucide="table" class="w-3 h-3"></i>Excel</button>
+                                <span class="mx-1 text-base-300">|</span>
+                                <button class="btn btn-ghost btn-xs" id="btn-schedule-open" title="Schedule"><i data-lucide="clock" class="w-3 h-3"></i></button>
+                                <button class="btn btn-ghost btn-xs" id="btn-diff-open" title="Query Diff"><i data-lucide="columns-2" class="w-3 h-3"></i></button>
+                                <button class="btn btn-ghost btn-xs" id="btn-collab-open" title="Share"><i data-lucide="share-2" class="w-3 h-3"></i></button>
+                            </div>
+                        </div>
+                        <div class="flex-1 p-3" id="data-viewer" style="overflow:auto;"><p class="text-base-content/40 text-center mt-10">Select a table to view data</p></div>
+                    </div>
+                </div>
+
+                <!-- Builder Panel -->
+                <div id="tab-builder" class="tab-panel">
+                    <!-- Available Tables -->
+                    <div id="panel-builder-tables" class="overflow-y-auto p-3" style="width:260px;min-width:140px;">
+                        <h3 class="font-semibold text-sm mb-2">Available Tables</h3>
+                        <p class="text-xs text-base-content/50 mb-3">Drag tables from any database to the canvas</p>
+                        <div id="builder-tables-list"></div>
+                    </div>
+                    <div class="resize-handle-v" data-resize="panel-builder-tables" data-dir="left"></div>
+                    <!-- Canvas + Results -->
+                    <div class="flex-1 flex flex-col" style="min-width:0;overflow:hidden;">
+                        <!-- Toolbar -->
+                        <div class="p-2 border-b border-base-300 flex items-center justify-between shrink-0">
+                            <span class="text-sm font-semibold">Query Canvas</span>
+                            <div class="flex gap-1 items-center">
+                                <button class="btn btn-ghost btn-xs" id="btn-zoom-out"><i data-lucide="zoom-out" class="w-3 h-3"></i></button>
+                                <span class="text-xs text-base-content/60 w-10 text-center" id="zoom-level">100%</span>
+                                <button class="btn btn-ghost btn-xs" id="btn-zoom-in"><i data-lucide="zoom-in" class="w-3 h-3"></i></button>
+                                <button class="btn btn-ghost btn-xs" id="btn-zoom-reset"><i data-lucide="maximize-2" class="w-3 h-3"></i></button>
+                                <span class="mx-1 text-base-300">|</span>
+                                <button class="btn btn-primary btn-xs" id="btn-generate-run"><i data-lucide="play" class="w-3 h-3"></i>Generate &amp; Run</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-clear-canvas"><i data-lucide="trash-2" class="w-3 h-3"></i>Clear</button>
+                            </div>
+                        </div>
+                        <!-- Canvas -->
+                        <div class="flex-1 relative" id="canvas-wrapper">
+                            <div id="query-canvas" class="absolute inset-0 origin-top-left" style="transform:scale(1);">
+                                <div id="canvas-placeholder" class="absolute inset-0 flex items-center justify-center text-base-content/30">
+                                    <div class="text-center">
+                                        <i data-lucide="mouse-pointer-click" class="w-12 h-12 mx-auto mb-2"></i>
+                                        <p>Drag tables here to build cross-database queries</p>
+                                        <p class="text-xs mt-1 opacity-60">Join tables across different connections</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Resize -->
+                        <div class="resize-handle-h" id="builder-h-resize"><div class="resize-handle-h-line"></div></div>
+                        <!-- Results -->
+                        <div id="panel-builder-results" class="flex flex-col" style="height:240px;min-height:80px;overflow:hidden;">
+                            <div class="p-2 bg-base-100 border-b border-base-300 flex items-center justify-between shrink-0">
+                                <span class="text-xs font-semibold">Results</span>
+                                <div class="flex gap-1 hidden" id="builder-export-btns">
+                                    <button class="btn btn-ghost btn-xs" data-bexport="csv"><i data-lucide="file-text" class="w-3 h-3"></i>CSV</button>
+                                    <button class="btn btn-ghost btn-xs" data-bexport="json"><i data-lucide="braces" class="w-3 h-3"></i>JSON</button>
+                                    <button class="btn btn-ghost btn-xs" data-bexport="excel"><i data-lucide="table" class="w-3 h-3"></i>Excel</button>
+                                    <button class="btn btn-primary btn-xs" id="btn-save-as-db"><i data-lucide="database" class="w-3 h-3"></i>Save as DB</button>
+                                </div>
+                            </div>
+                            <div class="flex-1" id="builder-results" style="overflow:auto;min-height:0;">
+                                <p class="text-base-content/40 text-sm text-center mt-8">Results will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="resize-handle-v" data-resize="panel-builder-sql" data-dir="right"></div>
+                    <!-- SQL Sidebar -->
+                    <div id="panel-builder-sql" class="flex flex-col bg-base-100 border-l border-base-300" style="width:280px;min-width:160px;overflow:hidden;">
+                        <div class="p-2 border-b border-base-300 shrink-0 flex items-center justify-between"><span class="text-xs font-semibold">Generated SQL</span><button class="btn btn-ghost btn-xs" id="btn-copy-sql" title="Copy SQL"><i data-lucide="copy" class="w-3 h-3"></i></button></div>
+                        <div class="flex-1 overflow-auto p-3">
+                            <pre class="text-xs font-mono text-primary whitespace-pre-wrap" id="generated-sql">-- Drag tables and select columns to generate SQL</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SQL Editor Panel -->
+                <div id="tab-editor" class="tab-panel flex-col">
+                    <div class="flex items-center border-b border-base-300 bg-base-100 px-2 shrink-0">
+                        <div class="flex gap-1" id="editor-tabs"><button class="tab tab-sm tab-active" data-etab="1">Query 1</button></div>
+                        <button class="btn btn-ghost btn-xs ml-1" id="btn-add-tab"><i data-lucide="plus" class="w-3 h-3"></i></button>
+                    </div>
+                    <div class="flex-1 relative">
+                        <textarea id="sql-input" class="w-full h-full p-4 font-mono text-sm bg-base-200 border-none outline-none resize-none" placeholder="SELECT * FROM users WHERE active = 1;" spellcheck="false"></textarea>
+                    </div>
+                    <div class="p-2 border-t border-base-300 flex items-center gap-2 bg-base-100 shrink-0">
+                        <button class="btn btn-primary btn-sm" id="btn-exec-sql"><i data-lucide="play" class="w-4 h-4"></i>Execute</button>
+                        <button class="btn btn-ghost btn-sm" id="btn-format-sql"><i data-lucide="align-left" class="w-4 h-4"></i>Format</button>
+                        <span class="text-xs text-base-content/40 ml-auto">Ctrl+Enter to execute</span>
+                    </div>
+                    <div class="resize-handle-h" id="editor-h-resize"><div class="resize-handle-h-line"></div></div>
+                    <div id="panel-sql-results" class="flex flex-col" style="height:260px;min-height:80px;overflow:hidden;">
+                        <div class="p-2 border-b border-base-300 flex items-center justify-between bg-base-100 shrink-0">
+                            <span class="text-sm font-semibold" id="sql-result-info">Results</span>
+                            <div class="flex gap-1">
+                                <button class="btn btn-ghost btn-xs" data-sexport="csv"><i data-lucide="file-text" class="w-3 h-3"></i>CSV</button>
+                                <button class="btn btn-ghost btn-xs" data-sexport="json"><i data-lucide="braces" class="w-3 h-3"></i>JSON</button>
+                                <button class="btn btn-ghost btn-xs" data-sexport="excel"><i data-lucide="table" class="w-3 h-3"></i>Excel</button>
+                            </div>
+                        </div>
+                        <div class="flex-1" id="sql-results" style="overflow:auto;min-height:0;">
+                            <p class="text-base-content/40 text-sm text-center mt-8">Execute a query to see results</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Panel -->
+                <div id="tab-history" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 flex items-center gap-2 shrink-0">
+                        <input type="text" id="history-search" placeholder="Search queries..." class="input input-bordered input-sm flex-1">
+                        <button class="btn btn-ghost btn-sm" id="btn-clear-history"><i data-lucide="trash-2" class="w-4 h-4"></i>Clear</button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-3" id="history-list">
+                        <p class="text-base-content/40 text-center mt-10">No query history yet</p>
+                    </div>
+                </div>
+
+                <!-- ERD Panel -->
+                <div id="tab-erd" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 flex items-center justify-between shrink-0">
+                        <span class="font-semibold text-sm">Entity Relationship Diagram</span>
+                        <div class="flex gap-1">
+                            <select class="select select-xs select-bordered" id="erd-connection">
+                                <option value="">Select connection...</option>
+                            </select>
+                            <button class="btn btn-primary btn-xs" id="btn-gen-erd"><i data-lucide="refresh-cw" class="w-3 h-3"></i>Generate</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4" id="erd-canvas">
+                        <p class="text-base-content/40 text-center mt-20">Select a connection and click Generate</p>
+                    </div>
+                </div>
+
+                <!-- Compare Panel -->
+                <div id="tab-compare" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 flex items-center gap-3 shrink-0">
+                        <select class="select select-xs select-bordered" id="compare-left"><option value="">Source DB...</option></select>
+                        <span class="text-xs text-base-content/50">vs</span>
+                        <select class="select select-xs select-bordered" id="compare-right"><option value="">Target DB...</option></select>
+                        <button class="btn btn-primary btn-xs" id="btn-compare"><i data-lucide="arrow-left-right" class="w-3 h-3"></i>Compare</button>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4" id="compare-results">
+                        <p class="text-base-content/40 text-center mt-20">Select two connections and compare their schemas</p>
+                    </div>
+                </div>
+
+                <!-- Saved Queries Panel -->
+                <div id="tab-saved" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 flex items-center justify-between shrink-0">
+                        <span class="font-semibold text-sm">Saved Queries</span>
+                        <button class="btn btn-primary btn-xs" id="btn-save-query"><i data-lucide="plus" class="w-3 h-3"></i>Save Current</button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-3" id="saved-list">
+                        <p class="text-base-content/40 text-center mt-10">No saved queries yet</p>
+                    </div>
+                </div>
+
+                <!-- Import Panel -->
+                <div id="tab-import" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 shrink-0">
+                        <span class="font-semibold text-sm">Import Data</span>
+                    </div>
+                    <div class="flex-1 overflow-auto p-6">
+                        <div class="max-w-lg mx-auto">
+                            <div class="border-2 border-dashed border-base-300 rounded-xl p-10 text-center hover:border-primary transition" id="import-dropzone">
+                                <i data-lucide="upload-cloud" class="w-16 h-16 mx-auto text-base-content/30 mb-4"></i>
+                                <p class="text-base-content/60 mb-2">Drag & drop a file here, or click to browse</p>
+                                <p class="text-xs text-base-content/40">Supports CSV, JSON, Excel (.xlsx)</p>
+                                <input type="file" id="import-file" class="hidden" accept=".csv,.json,.xlsx,.xls">
+                            </div>
+                            <div class="mt-4 hidden" id="import-preview-area">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold" id="import-file-name"></span>
+                                    <button class="btn btn-ghost btn-xs" id="btn-import-clear">Clear</button>
+                                </div>
+                                <div class="form-control mb-3">
+                                    <label class="label"><span class="label-text text-xs">Table Name</span></label>
+                                    <input type="text" id="import-table-name" class="input input-bordered input-sm" placeholder="my_imported_data">
+                                </div>
+                                <div class="form-control mb-3">
+                                    <label class="label"><span class="label-text text-xs">Target Connection</span></label>
+                                    <select class="select select-bordered select-sm" id="import-target-conn"></select>
+                                </div>
+                                <div class="overflow-x-auto max-h-48 border border-base-300 rounded mb-3" id="import-preview"></div>
+                                <button class="btn btn-primary btn-sm w-full" id="btn-import-exec"><i data-lucide="database" class="w-4 h-4"></i>Import to Database</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Builder Panel -->
+                <div id="tab-form" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 shrink-0 flex items-center justify-between">
+                        <span class="font-semibold text-sm">Form Query Builder</span>
+                        <div class="flex gap-1">
+                            <button class="btn btn-primary btn-xs" id="btn-fb-run"><i data-lucide="play" class="w-3 h-3"></i>Run</button>
+                            <button class="btn btn-ghost btn-xs" id="btn-fb-clear"><i data-lucide="trash-2" class="w-3 h-3"></i>Clear</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex overflow-hidden">
+                        <div class="w-72 border-r border-base-300 overflow-y-auto p-3">
+                            <div class="form-control mb-2"><label class="label py-0"><span class="label-text text-xs">Table</span></label><select class="select select-bordered select-xs w-full" id="form-builder-table"></select></div>
+                            <div class="form-control mb-2"><label class="label py-0"><span class="label-text text-xs">Columns</span></label><div id="fb-columns" class="flex flex-wrap gap-1"></div></div>
+                            <div class="form-control mb-2"><label class="label py-0"><span class="label-text text-xs">Order By</span></label><input type="text" class="input input-bordered input-xs w-full" id="fb-order" placeholder="column ASC"></div>
+                            <div class="form-control mb-2"><label class="label py-0"><span class="label-text text-xs">Limit</span></label><input type="number" class="input input-bordered input-xs w-full" id="fb-limit" placeholder="100"></div>
+                            <hr class="my-2">
+                            <div class="text-xs font-semibold mb-1">Conditions</div>
+                            <div class="flex gap-1 mb-1"><select class="select select-xs select-bordered flex-1" id="fb-cond-col"></select><select class="select select-xs select-bordered" id="fb-cond-op"><option>=</option><option>!=</option><option>></option><option><</option><option>LIKE</option></select></div>
+                            <div class="flex gap-1 mb-2"><input class="input input-xs input-bordered flex-1" id="fb-cond-val" placeholder="value"><button class="btn btn-xs btn-primary" id="btn-fb-add-condition">+</button></div>
+                            <div id="fb-conditions-list" class="flex flex-wrap gap-1"></div>
+                        </div>
+                        <div class="flex-1 flex flex-col overflow-hidden" style="min-width:0;">
+                            <div class="p-2 bg-base-200 text-xs font-mono border-b border-base-300"><pre id="fb-generated-sql" class="text-primary whitespace-pre-wrap"></pre></div>
+                            <div class="flex-1 overflow-auto p-2" id="fb-results"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Panel -->
+                <div id="tab-charts" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 shrink-0 flex items-center gap-3 flex-wrap">
+                        <span class="font-semibold text-sm">Chart Builder</span>
+                        <select class="select select-xs select-bordered" id="chart-type"><option value="bar">Bar</option><option value="line">Line</option><option value="pie">Pie</option><option value="doughnut">Doughnut</option><option value="scatter">Scatter</option></select>
+                        <select class="select select-xs select-bordered" id="chart-label-col"><option value="">Label col...</option></select>
+                        <select class="select select-xs select-bordered" id="chart-value-col"><option value="">Value col...</option></select>
+                        <button class="btn btn-primary btn-xs" id="btn-create-chart"><i data-lucide="bar-chart-3" class="w-3 h-3"></i>Create</button>
+                        <button class="btn btn-ghost btn-xs" onclick="YDB.Charts.pinToDashboard()"><i data-lucide="pin" class="w-3 h-3"></i>Pin to Dashboard</button>
+                        <button class="btn btn-ghost btn-xs" onclick="YDB.Charts.populateColumns()"><i data-lucide="refresh-cw" class="w-3 h-3"></i>Refresh</button>
+                    </div>
+                    <div class="flex-1 p-4 flex items-center justify-center relative">
+                        <div id="chart-placeholder" class="text-center text-base-content/40">
+                            <i data-lucide="bar-chart-3" class="w-16 h-16 mx-auto mb-3 opacity-30"></i>
+                            <p class="text-sm font-medium mb-1">How to use Chart Builder:</p>
+                            <ol class="text-xs text-left max-w-sm mx-auto space-y-1">
+                                <li>1. Run a query in <b>SQL</b>, <b>Builder</b>, or select a table in <b>Explorer</b></li>
+                                <li>2. Switch to this <b>Charts</b> tab</li>
+                                <li>3. Select <b>Label</b> column (X-axis) and <b>Value</b> column (Y-axis)</li>
+                                <li>4. Choose chart type and click <b>Create</b></li>
+                            </ol>
+                        </div>
+                        <canvas id="chart-canvas" class="w-full max-h-full" style="display:none;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Dashboard Panel -->
+                <div id="tab-dashboard" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 shrink-0 flex items-center justify-between">
+                        <span class="font-semibold text-sm">Dashboard</span>
+                        <button class="btn btn-ghost btn-xs" id="btn-clear-dashboard"><i data-lucide="trash-2" class="w-3 h-3"></i>Clear All</button>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4"><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="dashboard-grid"></div></div>
+                </div>
+
+                <!-- Terminal Panel -->
+                <div id="tab-terminal" class="tab-panel flex-col">
+                    <div class="p-2 border-b border-base-300 shrink-0 flex items-center justify-between">
+                        <span class="font-semibold text-sm">Terminal</span>
+                        <button class="btn btn-ghost btn-xs" id="btn-terminal-clear"><i data-lucide="trash-2" class="w-3 h-3"></i>Clear</button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-3 bg-base-200 font-mono text-xs" id="terminal-output">
+                        <div class="text-base-content/50">yDB Terminal v1.0 - Type "help" for commands</div>
+                    </div>
+                    <div class="p-2 bg-base-100 border-t border-base-300 flex items-center gap-2 shrink-0">
+                        <span class="text-success text-xs font-mono">ydb&gt;</span>
+                        <input type="text" class="input input-xs input-bordered flex-1 font-mono" id="terminal-input" placeholder="Type SQL or command..." autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- Templates Panel -->
+                <div id="tab-templates" class="tab-panel">
+                    <div class="w-72 border-r border-base-300 overflow-y-auto p-3">
+                        <h3 class="font-semibold text-sm mb-2">Query Templates</h3>
+                        <div id="templates-list"></div>
+                    </div>
+                    <div class="flex-1 flex flex-col overflow-hidden" style="min-width:0;">
+                        <div class="flex-1 overflow-auto p-4" id="template-params"><p class="text-base-content/40 text-sm text-center mt-10">Select a template from the left</p></div>
+                        <div class="p-3 border-t border-base-300 shrink-0"><button class="btn btn-primary btn-sm" id="btn-use-template"><i data-lucide="play" class="w-4 h-4"></i>Apply to Editor</button></div>
+                    </div>
+                </div>
+
+                <!-- Admin Panel -->
+                <div id="tab-admin" class="tab-panel flex-col">
+                    <div class="p-3 border-b border-base-300 shrink-0">
+                        <div class="tabs tabs-sm" id="admin-subtabs">
+                            <button class="tab tab-active" data-subtab="users">Users</button>
+                            <button class="tab" data-subtab="audit">Audit Log</button>
+                            <button class="tab" data-subtab="backup">Backup</button>
+                            <button class="tab" data-subtab="generator">Data Gen</button>
+                            <button class="tab" data-subtab="migration">Migration</button>
+                            <button class="tab" data-subtab="procs">Procedures</button>
+                            <button class="tab" data-subtab="notifications">Alerts</button>
+                            <button class="tab" data-subtab="plugins">Plugins</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto p-3">
+                        <!-- Users -->
+                        <div class="admin-sub active" id="sub-users">
+                            <div class="flex items-center gap-2 mb-3">
+                                <input type="text" class="input input-xs input-bordered" id="new-user-name" placeholder="Username">
+                                <input type="email" class="input input-xs input-bordered" id="new-user-email" placeholder="Email">
+                                <select class="select select-xs select-bordered" id="new-user-role"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
+                                <button class="btn btn-primary btn-xs" id="btn-add-user"><i data-lucide="plus" class="w-3 h-3"></i>Add</button>
+                            </div>
+                            <div id="users-list"></div>
+                        </div>
+                        <!-- Audit -->
+                        <div class="admin-sub" id="sub-audit" style="display:none;">
+                            <div class="flex gap-2 mb-3"><input type="text" class="input input-xs input-bordered flex-1" id="audit-search" placeholder="Search audit..."><button class="btn btn-ghost btn-xs" id="btn-clear-audit">Clear</button></div>
+                            <div id="audit-list"></div>
+                        </div>
+                        <!-- Backup -->
+                        <div class="admin-sub" id="sub-backup" style="display:none;">
+                            <div class="flex gap-2 mb-3">
+                                <button class="btn btn-primary btn-sm" id="btn-backup"><i data-lucide="download" class="w-4 h-4"></i>Export Backup (SQL Dump)</button>
+                                <button class="btn btn-ghost btn-sm" id="btn-restore"><i data-lucide="upload" class="w-4 h-4"></i>Restore from File</button>
+                                <input type="file" id="restore-file" class="hidden" accept=".sql">
+                            </div>
+                            <p class="text-sm text-base-content/50">Select a connection in the sidebar, then click Export to generate a full SQL dump of all tables and data.</p>
+                        </div>
+                        <!-- Data Generator -->
+                        <div class="admin-sub" id="sub-generator" style="display:none;">
+                            <div class="flex gap-2 mb-3">
+                                <select class="select select-xs select-bordered" id="gen-table"><option value="">Table...</option></select>
+                                <input type="number" class="input input-xs input-bordered w-20" id="gen-count" value="10" min="1" max="10000">
+                                <button class="btn btn-primary btn-xs" id="btn-generate-data"><i data-lucide="sparkles" class="w-3 h-3"></i>Generate</button>
+                            </div>
+                            <div id="gen-preview"></div>
+                        </div>
+                        <!-- Migration -->
+                        <div class="admin-sub" id="sub-migration" style="display:none;">
+                            <div class="flex gap-2 mb-3">
+                                <select class="select select-xs select-bordered" id="migration-source"><option value="">Source...</option></select>
+                                <span class="text-xs">→</span>
+                                <select class="select select-xs select-bordered" id="migration-target"><option value="">Target...</option></select>
+                                <button class="btn btn-primary btn-xs" id="btn-gen-migration"><i data-lucide="git-compare" class="w-3 h-3"></i>Generate</button>
+                            </div>
+                            <pre class="bg-base-200 p-3 rounded text-xs font-mono text-primary whitespace-pre-wrap hidden" id="migration-output"></pre>
+                        </div>
+                        <!-- Stored Procedures -->
+                        <div class="admin-sub" id="sub-procs" style="display:none;">
+                            <div class="grid grid-cols-3 gap-2 mb-3">
+                                <input type="text" class="input input-xs input-bordered" id="proc-name" placeholder="Procedure name">
+                                <input type="text" class="input input-xs input-bordered" id="proc-params" placeholder="Params (e.g. id INT)">
+                                <button class="btn btn-primary btn-xs" id="btn-create-proc"><i data-lucide="plus" class="w-3 h-3"></i>Create</button>
+                            </div>
+                            <textarea class="textarea textarea-bordered w-full font-mono text-xs h-16 mb-3" id="proc-body" placeholder="SELECT * FROM ..."></textarea>
+                            <div id="procs-list"></div>
+                        </div>
+                        <!-- Notifications -->
+                        <div class="admin-sub" id="sub-notifications" style="display:none;">
+                            <div class="flex gap-2 mb-3">
+                                <button class="btn btn-primary btn-xs" id="btn-check-alerts"><i data-lucide="bell" class="w-3 h-3"></i>Check Now</button>
+                                <button class="btn btn-ghost btn-xs" onclick="YDB.Notifications.markAllRead()">Mark All Read</button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><div class="text-xs font-semibold mb-2">Rules</div>
+                                    <div class="flex gap-1 mb-2"><input class="input input-xs input-bordered flex-1" id="alert-rule-name" placeholder="Rule name"><input class="input input-xs input-bordered flex-1" id="alert-rule-condition" placeholder="rowCount > 10"></div>
+                                    <div class="flex gap-1 mb-2"><input class="input input-xs input-bordered flex-1" id="alert-rule-query" placeholder="SELECT * FROM..."><button class="btn btn-xs btn-primary" id="btn-add-alert-rule">+</button></div>
+                                    <div id="alert-rules-list"></div>
+                                </div>
+                                <div><div class="text-xs font-semibold mb-2">Alerts</div><div id="alerts-list"></div></div>
+                            </div>
+                        </div>
+                        <!-- Plugins -->
+                        <div class="admin-sub" id="sub-plugins" style="display:none;">
+                            <div id="plugins-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </section>
+
+    <!-- ===== MODALS ===== -->
+
+    <!-- Connection Modal -->
+    <dialog id="modal-connection" class="modal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <h3 class="font-bold text-lg mb-4" id="conn-modal-title">New Connection</h3>
+            <form id="form-connection">
+                <input type="hidden" id="conn-edit-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-control col-span-2">
+                        <label class="label"><span class="label-text">Connection Name</span></label>
+                        <input type="text" id="conn-name" class="input input-bordered" placeholder="My Database" required>
+                    </div>
+                    <div class="form-control col-span-2">
+                        <label class="label"><span class="label-text">Database Type</span></label>
+                        <select id="conn-type" class="select select-bordered w-full" required>
+                            <optgroup label="Relational / SQL">
+                                <option value="mysql">MySQL</option>
+                                <option value="mariadb">MariaDB</option>
+                                <option value="postgresql">PostgreSQL</option>
+                                <option value="sqlite">SQLite</option>
+                                <option value="oracle">Oracle DB</option>
+                                <option value="mssql">Microsoft SQL Server</option>
+                                <option value="db2">IBM DB2</option>
+                                <option value="firebird">Firebird</option>
+                                <option value="h2">H2 / HSQLDB</option>
+                            </optgroup>
+                            <optgroup label="Analytical (OLAP)">
+                                <option value="snowflake">Snowflake</option>
+                                <option value="clickhouse">ClickHouse</option>
+                                <option value="teradata">Teradata</option>
+                                <option value="greenplum">Greenplum</option>
+                                <option value="vertica">Vertica</option>
+                                <option value="hive">Apache Hive</option>
+                                <option value="spark">Apache Spark</option>
+                            </optgroup>
+                            <optgroup label="Cloud Databases">
+                                <option value="redshift">AWS Redshift</option>
+                                <option value="athena">AWS Athena</option>
+                                <option value="dynamodb">AWS DynamoDB</option>
+                                <option value="bigquery">Google BigQuery</option>
+                                <option value="spanner">Cloud Spanner</option>
+                                <option value="cloudsql">Cloud SQL</option>
+                                <option value="azuresql">Azure SQL</option>
+                                <option value="synapse">Azure Synapse</option>
+                                <option value="cockroachdb">CockroachDB</option>
+                            </optgroup>
+                            <optgroup label="NoSQL / Document">
+                                <option value="mongodb">MongoDB</option>
+                                <option value="cassandra">Cassandra</option>
+                                <option value="redis">Redis</option>
+                                <option value="couchbase">Couchbase</option>
+                                <option value="influxdb">InfluxDB</option>
+                                <option value="neo4j">Neo4j</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Host</span></label>
+                        <input type="text" id="conn-host" class="input input-bordered" placeholder="localhost">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Port</span></label>
+                        <input type="number" id="conn-port" class="input input-bordered" placeholder="3306">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Username</span></label>
+                        <input type="text" id="conn-user" class="input input-bordered" placeholder="root">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Password</span></label>
+                        <input type="password" id="conn-pass" class="input input-bordered" placeholder="********">
+                    </div>
+                    <div class="form-control col-span-2">
+                        <label class="label"><span class="label-text">Database Name</span></label>
+                        <input type="text" id="conn-db" class="input input-bordered" placeholder="mydb">
+                    </div>
+                </div>
+                <div class="modal-action">
+                    <button type="button" class="btn btn-outline" id="btn-test-conn"><i data-lucide="plug" class="w-4 h-4"></i>Test</button>
+                    <button type="button" class="btn btn-ghost" id="btn-cancel-conn">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Save</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Join Modal -->
+    <dialog id="modal-join" class="modal">
+        <div class="modal-box max-w-lg" id="join-modal-body"></div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Save as DB Modal -->
+    <dialog id="modal-save-db" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="database" class="w-5 h-5 inline"></i> Save as Virtual Database</h3>
+            <p class="text-sm text-base-content/60 mb-4">Create a new virtual connection from the joined query results.</p>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Connection Name</span></label>
+                <input type="text" id="save-db-name" class="input input-bordered" placeholder="My Joined Data" required>
+            </div>
+            <div class="form-control mb-4">
+                <label class="label"><span class="label-text">Table Name</span></label>
+                <input type="text" id="save-db-table" class="input input-bordered" placeholder="joined_results" required>
+            </div>
+            <div class="modal-action">
+                <button class="btn btn-ghost" id="btn-cancel-save-db">Cancel</button>
+                <button class="btn btn-primary" id="btn-confirm-save-db"><i data-lucide="save" class="w-4 h-4"></i>Create</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- DDL Viewer Modal -->
+    <dialog id="modal-ddl" class="modal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="file-code" class="w-5 h-5 inline"></i> DDL / CREATE Statement</h3>
+            <pre class="bg-base-200 p-4 rounded-lg text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap" id="ddl-content"></pre>
+            <div class="modal-action">
+                <button class="btn btn-ghost btn-sm" id="btn-copy-ddl"><i data-lucide="copy" class="w-4 h-4"></i>Copy</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-ddl').close()">Close</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Table Structure Editor Modal -->
+    <dialog id="modal-structure" class="modal">
+        <div class="modal-box w-11/12 max-w-4xl">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="settings" class="w-5 h-5 inline"></i> Table Structure: <span id="struct-table-name"></span></h3>
+            <div class="overflow-x-auto" id="struct-editor"></div>
+            <div class="modal-action">
+                <button class="btn btn-primary btn-sm" id="btn-struct-add-col"><i data-lucide="plus" class="w-4 h-4"></i>Add Column</button>
+                <button class="btn btn-ghost btn-sm" id="btn-struct-gen-ddl"><i data-lucide="code" class="w-4 h-4"></i>Generate ALTER</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-structure').close()">Close</button>
+            </div>
+            <pre class="bg-base-200 p-3 rounded text-xs font-mono mt-3 hidden" id="struct-ddl-output"></pre>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Save Query Modal -->
+    <dialog id="modal-save-query" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4">Save Query</h3>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Name</span></label>
+                <input type="text" id="sq-name" class="input input-bordered" placeholder="My Query" required>
+            </div>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Folder</span></label>
+                <input type="text" id="sq-folder" class="input input-bordered" placeholder="General">
+            </div>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">SQL</span></label>
+                <textarea id="sq-sql" class="textarea textarea-bordered h-24 font-mono text-xs" readonly></textarea>
+            </div>
+            <div class="modal-action">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-save-query').close()">Cancel</button>
+                <button class="btn btn-primary" id="btn-confirm-save-query"><i data-lucide="save" class="w-4 h-4"></i>Save</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Query Diff Modal -->
+    <dialog id="modal-diff" class="modal">
+        <div class="modal-box w-11/12 max-w-5xl max-h-[80vh]">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="columns-2" class="w-5 h-5 inline"></i> Query Diff</h3>
+            <div class="grid grid-cols-2 gap-2 mb-3">
+                <textarea class="textarea textarea-bordered font-mono text-xs h-20" id="diff-sql-a" placeholder="Query A (paste SQL)"></textarea>
+                <textarea class="textarea textarea-bordered font-mono text-xs h-20" id="diff-sql-b" placeholder="Query B (paste SQL)"></textarea>
+            </div>
+            <button class="btn btn-primary btn-sm mb-3" id="btn-run-diff"><i data-lucide="play" class="w-3 h-3"></i>Run & Compare</button>
+            <div class="grid grid-cols-2 gap-2 overflow-auto max-h-60" id="diff-results">
+                <div id="diff-result-a" class="border border-base-300 rounded p-2 overflow-auto"></div>
+                <div id="diff-result-b" class="border border-base-300 rounded p-2 overflow-auto"></div>
+            </div>
+            <div class="modal-action"><button class="btn btn-ghost" onclick="document.getElementById('modal-diff').close()">Close</button></div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Scheduled Queries Modal -->
+    <dialog id="modal-schedule" class="modal">
+        <div class="modal-box max-w-lg">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="clock" class="w-5 h-5 inline"></i> Scheduled Queries</h3>
+            <div id="schedule-list" class="mb-4"></div>
+            <div class="border border-base-300 rounded-lg p-3">
+                <h4 class="text-sm font-semibold mb-2">New Schedule</h4>
+                <div class="form-control mb-2">
+                    <input type="text" id="sched-name" class="input input-bordered input-sm" placeholder="Schedule name">
+                </div>
+                <div class="form-control mb-2">
+                    <textarea id="sched-sql" class="textarea textarea-bordered font-mono text-xs h-16" placeholder="SQL query to run"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                    <select class="select select-bordered select-sm" id="sched-interval">
+                        <option value="5m">Every 5 min</option>
+                        <option value="15m">Every 15 min</option>
+                        <option value="1h">Every hour</option>
+                        <option value="6h">Every 6 hours</option>
+                        <option value="1d">Daily</option>
+                    </select>
+                    <select class="select select-bordered select-sm" id="sched-conn"></select>
+                </div>
+                <button class="btn btn-primary btn-sm w-full" id="btn-add-schedule"><i data-lucide="plus" class="w-3 h-3"></i>Add Schedule</button>
+            </div>
+            <div class="modal-action"><button class="btn btn-ghost" onclick="document.getElementById('modal-schedule').close()">Close</button></div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Collaboration Modal -->
+    <dialog id="modal-collab" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 class="font-bold text-lg mb-4"><i data-lucide="share-2" class="w-5 h-5 inline"></i> Share & Collaborate</h3>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Share Link</span></label>
+                <div class="join w-full">
+                    <input type="text" id="collab-link" class="input input-bordered input-sm join-item flex-1" readonly>
+                    <button class="btn btn-primary btn-sm join-item" id="btn-copy-link"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Permissions</span></label>
+                <select class="select select-bordered select-sm" id="collab-perm">
+                    <option value="view">View Only</option>
+                    <option value="edit">Can Edit</option>
+                    <option value="admin">Full Access</option>
+                </select>
+            </div>
+            <div class="form-control mb-3">
+                <label class="label"><span class="label-text">Share With (email)</span></label>
+                <input type="email" id="collab-email" class="input input-bordered input-sm" placeholder="colleague@company.com">
+            </div>
+            <button class="btn btn-primary btn-sm w-full" id="btn-send-invite"><i data-lucide="send" class="w-4 h-4"></i>Send Invitation</button>
+            <div class="modal-action"><button class="btn btn-ghost" onclick="document.getElementById('modal-collab').close()">Close</button></div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <!-- Toast -->
+    <div class="toast toast-end" id="toast-container"></div>
+
+    <!-- Scripts (order matters) -->
+    <script src="js/config.js"></script>
+    <script src="js/mock-data.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/connections.js"></script>
+    <script src="js/explorer.js"></script>
+    <script src="js/query-engine.js"></script>
+    <script src="js/builder.js"></script>
+    <script src="js/sql-editor.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/data-editor.js"></script>
+    <script src="js/ddl-viewer.js"></script>
+    <script src="js/erd.js"></script>
+    <script src="js/structure-editor.js"></script>
+    <script src="js/saved-queries.js"></script>
+    <script src="js/autocomplete.js"></script>
+    <script src="js/explain.js"></script>
+    <script src="js/filtering.js"></script>
+    <script src="js/compare.js"></script>
+    <script src="js/import.js"></script>
+    <script src="js/schedule.js"></script>
+    <script src="js/diff.js"></script>
+    <script src="js/masking.js"></script>
+    <script src="js/collab.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/data-generator.js"></script>
+    <script src="js/migration.js"></script>
+    <script src="js/audit.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/backup.js"></script>
+    <script src="js/form-builder.js"></script>
+    <script src="js/stored-procs.js"></script>
+    <script src="js/terminal.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/plugins.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
