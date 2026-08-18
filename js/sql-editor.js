@@ -22,15 +22,34 @@ YDB.SQLEditor = {
     execute: function () {
         var sql = document.getElementById('sql-input').value.trim();
         if (!sql) { YDB.UI.toast('Enter a query', 'warning'); return; }
-        var result = YDB.QueryEngine.execute(sql);
+
         var container = document.getElementById('sql-results');
-        if (result.error) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + result.error + '</div>'; return; }
-        if (!result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
-        YDB.UI.renderTable('sql-results', result.columns, result.columns, result.data);
-        document.getElementById('sql-result-info').textContent = 'Results - ' + result.data.length + ' rows';
-        YDB.History.add(sql);
-        YDB.Audit.log(sql);
-        YDB.UI.toast('Executed: ' + result.data.length + ' rows', 'success');
+        var conn = YDB.State.activeConnection;
+
+        // Use real API if online and connection selected
+        if (YDB.API.isOnline() && conn && conn.id) {
+            YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
+                .then(function (result) {
+                    if (!result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+                    YDB.UI.renderTable('sql-results', result.columns, result.columns, result.data);
+                    document.getElementById('sql-result-info').textContent = 'Results - ' + result.rowCount + ' rows (' + result.duration + 'ms)';
+                    YDB.History.add(sql);
+                    YDB.UI.toast('Executed: ' + result.rowCount + ' rows in ' + result.duration + 'ms', 'success');
+                })
+                .catch(function (err) {
+                    container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>';
+                });
+        } else {
+            // Fallback to mock query engine
+            var result = YDB.QueryEngine.execute(sql);
+            if (result.error) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + result.error + '</div>'; return; }
+            if (!result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+            YDB.UI.renderTable('sql-results', result.columns, result.columns, result.data);
+            document.getElementById('sql-result-info').textContent = 'Results - ' + result.data.length + ' rows';
+            YDB.History.add(sql);
+            YDB.Audit.log(sql);
+            YDB.UI.toast('Executed: ' + result.data.length + ' rows', 'success');
+        }
     },
 
     format: function () {

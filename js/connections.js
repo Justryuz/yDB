@@ -1,5 +1,8 @@
 /**
- * YDB - Connection Management
+ * @file connections.js
+ * @description Connection management — CRUD with API support.
+ * Uses API when online, localStorage when offline.
+ * @module YDB.Connections
  */
 YDB.Connections = {
     init: function () {
@@ -14,7 +17,24 @@ YDB.Connections = {
         });
     },
 
+    /**
+     * Load and render connections. Uses API if online, localStorage if offline.
+     */
     render: function () {
+        var self = this;
+        if (YDB.API.isOnline()) {
+            YDB.API.get('/connections').then(function (conns) {
+                YDB.State.connections = conns.map(function (c) {
+                    return { id: c.id, name: c.name, type: c.db_type, host: c.host, port: c.port, username: c.username, password: '', database: c.database_name };
+                });
+                self._renderList();
+            }).catch(function () { self._renderList(); });
+        } else {
+            this._renderList();
+        }
+    },
+
+    _renderList: function () {
         var S = YDB.State, el = document.getElementById('list-connections');
         if (!S.connections.length) { el.innerHTML = '<p class="text-base-content/50 text-sm text-center py-4">No connections</p>'; return; }
 
@@ -85,28 +105,40 @@ YDB.Connections = {
     },
 
     save: function () {
+        var self = this;
         var editId = document.getElementById('conn-edit-id').value;
         var data = {
-            id: editId || 'conn-' + Date.now(),
             name: document.getElementById('conn-name').value,
-            type: document.getElementById('conn-type').value,
+            db_type: document.getElementById('conn-type').value,
             host: document.getElementById('conn-host').value,
             port: parseInt(document.getElementById('conn-port').value) || YDB.Config.PORTS[document.getElementById('conn-type').value] || 0,
             username: document.getElementById('conn-user').value,
             password: document.getElementById('conn-pass').value,
-            database: document.getElementById('conn-db').value
+            database_name: document.getElementById('conn-db').value
         };
-        if (editId) {
-            var idx = YDB.State.connections.findIndex(function (c) { return c.id === editId; });
-            if (idx >= 0) YDB.State.connections[idx] = data;
+
+        var done = function () {
+            document.getElementById('modal-connection').close();
+            self.render();
+            YDB.Builder.renderTablesList();
+            YDB.UI.toast('Connection saved', 'success');
+        };
+
+        if (YDB.API.isOnline()) {
+            var req = editId ? YDB.API.put('/connections/' + editId, data) : YDB.API.post('/connections', data);
+            req.then(done).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
         } else {
-            YDB.State.connections.push(data);
+            // Offline mode — save to localStorage
+            var localData = { id: editId || 'conn-' + Date.now(), name: data.name, type: data.db_type, host: data.host, port: data.port, username: data.username, password: data.password, database: data.database_name };
+            if (editId) {
+                var idx = YDB.State.connections.findIndex(function (c) { return c.id === editId; });
+                if (idx >= 0) YDB.State.connections[idx] = localData;
+            } else {
+                YDB.State.connections.push(localData);
+            }
+            YDB.State.save();
+            done();
         }
-        YDB.State.save();
-        document.getElementById('modal-connection').close();
-        this.render();
-        YDB.Builder.renderTablesList();
-        YDB.UI.toast('Connection saved', 'success');
     },
 
     remove: function (id) {
@@ -124,7 +156,15 @@ YDB.Connections = {
     },
 
     test: function () {
+        var connId = document.getElementById('conn-edit-id').value;
         YDB.UI.toast('Testing connection...', 'info');
-        setTimeout(function () { YDB.UI.toast('Connection successful!', 'success'); }, 800);
+
+        if (YDB.API.isOnline() && connId) {
+            YDB.API.post('/connections/' + connId + '/test', {}).then(function (res) {
+                YDB.UI.toast(res.message, res.success ? 'success' : 'error');
+            }).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
+        } else {
+            setTimeout(function () { YDB.UI.toast('Connection successful! (mock)', 'success'); }, 800);
+        }
     }
 };

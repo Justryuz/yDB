@@ -1,6 +1,7 @@
 /**
  * @file auth.js
- * @description Authentication module — login, logout, splash screen, session management.
+ * @description Authentication module — login, logout, splash screen.
+ * Uses API when backend is online, falls back to mock credentials when offline.
  * @module YDB.Auth
  */
 
@@ -21,7 +22,25 @@ YDB.Auth = {
             self.logout();
         });
 
-        // Auto-login from existing session
+        // Check for existing token (API mode) or session (mock mode)
+        if (YDB.API.token) {
+            // Verify token is still valid
+            YDB.API.get('/auth/me').then(function (user) {
+                YDB.API.online = true;
+                YDB.State.user = user.username;
+                self.showSplashThenApp();
+            }).catch(function () {
+                YDB.API.clearToken();
+                // Fallback to mock session check
+                self._checkMockSession();
+            });
+        } else {
+            self._checkMockSession();
+        }
+    },
+
+    /** @private Check mock session (localStorage-based) */
+    _checkMockSession: function () {
         if (sessionStorage.getItem('ydb-user')) {
             YDB.State.user = sessionStorage.getItem('ydb-user');
             this.showSplashThenApp();
@@ -29,34 +48,62 @@ YDB.Auth = {
     },
 
     /**
-     * Attempt login with form credentials.
-     * Demo credentials: admin / password
+     * Login — try API first, fallback to mock.
      */
     login: function () {
-        var user = document.getElementById('input-username').value;
-        var pass = document.getElementById('input-password').value;
+        var self = this;
+        var username = document.getElementById('input-username').value;
+        var password = document.getElementById('input-password').value;
 
-        if (user === 'admin' && pass === 'password') {
-            YDB.State.user = user;
-            sessionStorage.setItem('ydb-user', user);
+        if (!username || !password) {
+            YDB.UI.toast('Enter username and password', 'warning');
+            return;
+        }
+
+        // Try API login
+        YDB.API.post('/auth/login', { username: username, password: password })
+            .then(function (data) {
+                YDB.API.online = true;
+                YDB.API.setToken(data.token);
+                YDB.State.user = data.user.username;
+                self.showSplashThenApp();
+            })
+            .catch(function (err) {
+                // If API is down, fallback to mock credentials
+                if (err.status === 401 || err.status === 403) {
+                    YDB.UI.toast('Invalid credentials', 'error');
+                } else {
+                    // API unreachable — use mock mode
+                    self._mockLogin(username, password);
+                }
+            });
+    },
+
+    /** @private Mock login for offline/demo mode */
+    _mockLogin: function (username, password) {
+        if (username === 'admin' && (password === 'password' || password === 'admin123')) {
+            YDB.State.user = username;
+            sessionStorage.setItem('ydb-user', username);
             this.showSplashThenApp();
+            YDB.UI.toast('Running in offline mode (mock data)', 'info');
         } else {
             YDB.UI.toast('Invalid credentials. Try admin/password', 'error');
         }
     },
 
     /**
-     * Log out current user and return to login screen.
+     * Log out — clear tokens and session.
      */
     logout: function () {
         YDB.State.user = null;
+        YDB.API.clearToken();
         sessionStorage.removeItem('ydb-user');
         document.getElementById('page-app').classList.add('hidden');
         document.getElementById('page-login').classList.remove('hidden');
     },
 
     /**
-     * Show splash screen with logo animation, then transition to main app.
+     * Show splash screen then transition to main app.
      */
     showSplashThenApp: function () {
         document.getElementById('page-login').classList.add('hidden');
@@ -80,7 +127,7 @@ YDB.Auth = {
         document.getElementById('page-app').classList.remove('hidden');
         document.getElementById('display-user').textContent = YDB.State.user;
 
-        // Render all panels that need initial data
+        // Render all panels
         YDB.Connections.render();
         YDB.History.render();
         YDB.Builder.renderTablesList();
@@ -95,6 +142,7 @@ YDB.Auth = {
         YDB.Plugins.render();
 
         YDB.UI.icons();
-        YDB.UI.toast('Welcome back, ' + YDB.State.user + '!', 'success');
+        var mode = YDB.API.isOnline() ? '' : ' (offline mode)';
+        YDB.UI.toast('Welcome, ' + YDB.State.user + '!' + mode, 'success');
     }
 };

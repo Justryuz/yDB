@@ -21,6 +21,9 @@
         // ── 1. State ──────────────────────────────────────────
         YDB.State.load();
 
+        // ── 1.5. API Client ──────────────────────────────────
+        YDB.API.init();
+
         // ── 2. UI Foundation ──────────────────────────────────
         YDB.UI.initTheme();
         YDB.UI.initTabs();
