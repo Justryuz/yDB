@@ -10,6 +10,7 @@ const db = require('../db/pool');
 const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getClient } = require('../services/db-clients');
+const { withTunnel } = require('../services/ssh-tunnel');
 
 router.use(authenticate);
 
@@ -34,7 +35,6 @@ router.post('/execute', async (req, res) => {
             return res.status(400).json({ error: 'connectionId and sql required' });
         }
 
-        // Get connection details
         const connResult = await db.query(
             'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
             [connectionId, req.user.id]
@@ -45,30 +45,37 @@ router.post('/execute', async (req, res) => {
 
         const conn = connResult.rows[0];
         const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        const options = conn.options || {};
         const client = getClient(conn.db_type);
 
-        // Execute query
-        const result = await client.execute(
+        // Apply SSH tunnel if configured
+        const { opts, cleanup } = await withTunnel(
             { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
-            sql
+            options.ssh
         );
 
-        // Log to audit
-        await db.query(
-            'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
-            [req.user.id, connectionId, sql, result.error ? 'error' : 'success', result.duration || 0, result.rowCount || 0]
-        );
+        try {
+            const result = await client.execute(opts, sql);
 
-        if (result.error) {
-            return res.status(400).json({ error: result.error });
+            // Log to audit
+            await db.query(
+                'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
+                [req.user.id, connectionId, sql, result.error ? 'error' : 'success', result.duration || 0, result.rowCount || 0]
+            );
+
+            if (result.error) {
+                return res.status(400).json({ error: result.error });
+            }
+
+            res.json({
+                columns: result.columns,
+                data: result.data,
+                duration: result.duration,
+                rowCount: result.rowCount
+            });
+        } finally {
+            cleanup();
         }
-
-        res.json({
-            columns: result.columns,
-            data: result.data,
-            duration: result.duration,
-            rowCount: result.rowCount
-        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

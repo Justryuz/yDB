@@ -577,6 +577,43 @@
                         <input type="text" id="conn-db" class="input input-bordered" placeholder="mydb">
                     </div>
                 </div>
+                <!-- SSH Tunnel -->
+                <div class="divider text-xs">SSH Tunnel (Optional)</div>
+                <div class="form-control mb-3">
+                    <label class="label cursor-pointer justify-start gap-3">
+                        <input type="checkbox" id="conn-ssh-enabled" class="checkbox checkbox-sm checkbox-primary">
+                        <span class="label-text">Use SSH Tunnel</span>
+                    </label>
+                </div>
+                <div id="ssh-fields" class="grid grid-cols-2 gap-4 hidden">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">SSH Host</span></label>
+                        <input type="text" id="conn-ssh-host" class="input input-bordered" placeholder="ssh.example.com">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">SSH Port</span></label>
+                        <input type="number" id="conn-ssh-port" class="input input-bordered" placeholder="22" value="22">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">SSH Username</span></label>
+                        <input type="text" id="conn-ssh-user" class="input input-bordered" placeholder="root">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">SSH Auth Method</span></label>
+                        <select id="conn-ssh-auth" class="select select-bordered">
+                            <option value="password">Password</option>
+                            <option value="key">Private Key</option>
+                        </select>
+                    </div>
+                    <div class="form-control col-span-2" id="ssh-password-field">
+                        <label class="label"><span class="label-text">SSH Password</span></label>
+                        <input type="password" id="conn-ssh-pass" class="input input-bordered" placeholder="SSH password">
+                    </div>
+                    <div class="form-control col-span-2 hidden" id="ssh-key-field">
+                        <label class="label"><span class="label-text">Private Key (paste contents)</span></label>
+                        <textarea id="conn-ssh-key" class="textarea textarea-bordered font-mono text-xs h-20" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+                    </div>
+                </div>
                 <div class="modal-action">
                     <button type="button" class="btn btn-outline" id="btn-test-conn"><i data-lucide="plug" class="w-4 h-4"></i>Test</button>
                     <button type="button" class="btn btn-ghost" id="btn-cancel-conn">Cancel</button>

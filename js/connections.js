@@ -15,6 +15,15 @@ YDB.Connections = {
             var port = YDB.Config.PORTS[this.value];
             if (port) document.getElementById('conn-port').value = port;
         });
+
+        // SSH tunnel toggle
+        document.getElementById('conn-ssh-enabled').addEventListener('change', function () {
+            document.getElementById('ssh-fields').classList.toggle('hidden', !this.checked);
+        });
+        document.getElementById('conn-ssh-auth').addEventListener('change', function () {
+            document.getElementById('ssh-password-field').classList.toggle('hidden', this.value === 'key');
+            document.getElementById('ssh-key-field').classList.toggle('hidden', this.value !== 'key');
+        });
     },
 
     /**
@@ -114,8 +123,22 @@ YDB.Connections = {
             port: parseInt(document.getElementById('conn-port').value) || YDB.Config.PORTS[document.getElementById('conn-type').value] || 0,
             username: document.getElementById('conn-user').value,
             password: document.getElementById('conn-pass').value,
-            database_name: document.getElementById('conn-db').value
+            database_name: document.getElementById('conn-db').value,
+            options: {}
         };
+
+        // SSH tunnel options
+        if (document.getElementById('conn-ssh-enabled').checked) {
+            data.options.ssh = {
+                enabled: true,
+                host: document.getElementById('conn-ssh-host').value,
+                port: parseInt(document.getElementById('conn-ssh-port').value) || 22,
+                username: document.getElementById('conn-ssh-user').value,
+                authMethod: document.getElementById('conn-ssh-auth').value,
+                password: document.getElementById('conn-ssh-pass').value,
+                privateKey: document.getElementById('conn-ssh-key').value
+            };
+        }
 
         var done = function () {
             document.getElementById('modal-connection').close();
