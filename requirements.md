@@ -106,6 +106,8 @@ yDB is a web-based database management tool similar to phpMyAdmin but with multi
 ## Hidden Features (Code exists, tabs hidden)
 - **Form Query Builder** — Non-technical query building via dropdowns
 - **Chart Builder** — Bar/Line/Pie/Scatter from query results (Chart.js)
+- **ERD** — Auto-generate entity relationship diagrams
+- **Dashboard** — Pin charts and query widgets
 
 ## Shared Features (All tabs)
 - Connections sidebar (add/edit/test/delete)
