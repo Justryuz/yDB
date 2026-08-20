@@ -69,6 +69,7 @@
         YDB.StoredProcs.init();
         YDB.Notifications.init();
         YDB.Plugins.init();
+        YDB.APIClient.init();
 
         // ── 7. Admin Sub-tab Navigation ───────────────────────
         _initAdminSubtabs();

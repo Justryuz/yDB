@@ -159,3 +159,7 @@
 /* === Admin Subtabs === */
 .admin-sub { display: none; }
 .admin-sub.active { display: block; }
+
+/* === API Client Subtabs === */
+.api-subtab { display: none; }
+.api-subtab.active { display: block; }
