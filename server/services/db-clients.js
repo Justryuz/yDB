@@ -12,13 +12,14 @@ const pgClient = {
         try { await pool.query('SELECT 1'); return true; } catch { return false; } finally { await pool.end(); }
     },
     async execute(opts, sql) {
-        const { Pool } = require('pg');
-        const pool = new Pool({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database, connectionTimeoutMillis: 10000, query_timeout: 30000 });
+        const { Client } = require('pg');
+        const client = new Client({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database, connectionTimeoutMillis: 10000, statement_timeout: 30000 });
         try {
+            await client.connect();
             const start = Date.now();
-            const result = await pool.query(sql);
+            const result = await client.query(sql);
             return { columns: result.fields.map(f => f.name), data: result.rows, duration: Date.now() - start, rowCount: result.rowCount };
-        } finally { await pool.end(); }
+        } finally { await client.end(); }
     },
     async getSchemas(opts) {
         const { Pool } = require('pg');
