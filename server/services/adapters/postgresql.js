@@ -43,7 +43,7 @@ class PostgreSQLAdapter extends BaseAdapter {
         for (const row of tablesResult.rows) {
             if (excludeTables.includes(row.table_name)) continue;
             const cols = await this.connection.query(
-                `SELECT column_name, data_type, is_nullable, 
+                `SELECT c.column_name, c.data_type, c.is_nullable,
                  CASE WHEN pk.column_name IS NOT NULL THEN 'PK'
                       WHEN fk.column_name IS NOT NULL THEN 'FK'
                       ELSE '' END as key_type
