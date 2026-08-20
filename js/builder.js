@@ -253,8 +253,19 @@ YDB.Builder = {
         if (document.getElementById('builder-export-btns').classList.contains('hidden')) return;
         var sql = document.getElementById('generated-sql').textContent;
         if (sql.indexOf('--') === 0 && sql.indexOf('Cross-Database') < 0) return;
-        var result = YDB.QueryEngine.execute(sql);
-        if (!result.error) YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+
+        var conn = YDB.State.activeConnection;
+        if (YDB.API.isOnline() && YDB.API.token && conn && conn.id) {
+            YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
+                .then(function (result) {
+                    if (result.data && result.data.length) {
+                        YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+                    }
+                }).catch(function () { /* silent fail on auto-rerun */ });
+        } else {
+            var result = YDB.QueryEngine.execute(sql);
+            if (!result.error && result.data.length) YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+        }
     },
 
     // === Zoom ===
