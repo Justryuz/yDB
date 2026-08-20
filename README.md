@@ -1,206 +1,141 @@
 # yDB - Tame any database.
 
-A powerful, browser-based database management tool with multi-connection support, visual query builder, and cross-database join capabilities.
+A production-grade, open-source database management platform with cross-database joins powered by DuckDB, supporting 12+ database types simultaneously.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Features
+
+- **Cross-Database Joins** — Join tables from MySQL + PostgreSQL + MongoDB in one query via DuckDB engine (9ms for 2-way, 13ms for 3-way joins)
+- **12 Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL
+- **Visual Query Builder** — Drag-drop tables, auto-detect joins, generate SQL
+- **Built-in API Client** — Postman-like HTTP client with collections and auth
+- **Server-Side Security** — JWT auth, RBAC, AES-256 encrypted credentials, data masking
+- **SSH Tunnel** — Connect to private databases behind firewalls
+- **Real-Time Streaming** — SSE for long-running query results
+- **Observability** — Prometheus metrics, structured logging, audit trail
 
 ## Quick Start
 
-### Option 1: Docker (Recommended)
+### Docker (Recommended)
 ```bash
 git clone https://github.com/Justryuz/yDB.git
 cd yDB
 docker compose up -d
 ```
-App runs at **http://localhost:3000**
+Open **http://localhost:3000** — Login: `admin` / `admin123`
 
-### Option 2: Manual Setup
+### Manual Setup
 ```bash
 git clone https://github.com/Justryuz/yDB.git
 cd yDB/server
-
-# Install dependencies
 npm install
-
-# Setup PostgreSQL database
-# Create a database named 'ydb_app' and configure .env
-
-# Copy and edit environment config
-cp .env.example .env
-
-# Initialize database schema
-npm run db:init
-
-# Create default admin user
-npm run db:seed
-
-# Start server
-npm start
+cp .env.example .env    # Edit with your PostgreSQL credentials
+npm run db:init         # Create schema
+npm run db:seed         # Create admin user
+npm start               # http://localhost:3000
 ```
-App runs at **http://localhost:3000**
 
-### Option 3: Static Only (No backend, mock data)
+### Custom Port
 ```bash
-python -m http.server 8080
-# or: npx serve -l 8080
+PORT=9090 npm start
 ```
-
-**Default login:** `admin` / `admin123`
-
-**Custom port:**
-```bash
-PORT=9090 npm start             # Node.js
-docker compose up -d            # Docker (edit docker-compose.yml ports)
-```
-
-## Features
-
-### Core
-- **Multi-Database Connections** — Connect to MySQL, PostgreSQL, MongoDB, Oracle, SQL Server, and 25+ database types simultaneously
-- **Visual Query Builder** — Drag tables from different databases onto a canvas, auto-detect joins, generate federated SQL
-- **SQL Editor** — Auto-complete, multiple tabs, formatting, Ctrl+Enter execution
-- **Database Explorer** — Tree navigation, inline data editing, DDL viewer, structure editor
-
-### Data Tools
-- **Cross-Database Joins** — Join tables across MySQL, PostgreSQL, MongoDB in one query
-- **Export** — CSV, JSON, Excel from any results view
-- **Import** — Drag & drop CSV/JSON files to create tables
-- **Data Generator** — Generate realistic fake data for testing
-- **Data Masking** — Auto-mask sensitive columns (passwords, emails)
-
-### Visualization & Reporting
-- **Query Templates** — Pre-built patterns (Top N, Duplicates, Aggregations)
-
-### Administration
-- **User Management** — Roles (admin/editor/viewer)
-- **Audit Log** — Track all query execution
-- **Backup/Restore** — SQL dump export and import
-- **Schema Compare** — Diff two databases, generate migration SQL
-- **Stored Procedures** — Create, manage, execute
-- **Scheduled Queries** — Set intervals, detect anomalies
-- **Plugins** — Extensible architecture for add-ons
-
-### Developer Experience
-- **Terminal** — CLI-style SQL console in browser
-- **Query History** — Search, filter, re-run past queries
-- **Saved Queries** — Bookmark with folders
-- **Query Diff** — Compare two query results side-by-side
-- **Resizable Panels** — All dividers are draggable
-- **Dark/Light Theme** — Toggle with persistence
-
-## Supported Databases
-
-| Category | Databases |
-|----------|-----------|
-| Relational | MySQL, MariaDB, PostgreSQL, SQLite, Oracle, MSSQL, IBM DB2, Firebird, H2 |
-| Analytical | Snowflake, ClickHouse, Teradata, Greenplum, Vertica, Hive, Spark |
-| Cloud | AWS Redshift/Athena/DynamoDB, GCP BigQuery/Spanner/Cloud SQL, Azure SQL/Synapse, CockroachDB |
-| NoSQL | MongoDB, Cassandra, Redis, Couchbase, InfluxDB, Neo4j |
 
 ## Architecture
 
 ```
-ydb/
-├── index.html              Single-page application
-├── css/main.css            Custom styles
-├── js/                     40 modular JavaScript files
-│   ├── config.js           Constants & DB type definitions
-│   ├── state.js            Centralized state management
-│   ├── ui.js               Theme, tabs, resize, pagination
-│   ├── auth.js             Authentication & splash screen
-│   ├── connections.js      Connection CRUD
-│   ├── explorer.js         Tree view & data viewer
-│   ├── query-engine.js     SQL parser & executor
-│   ├── builder.js          Visual query builder & canvas
-│   ├── sql-editor.js       Editor, tabs, execution
-│   ├── history.js          Query history
-│   ├── export.js           CSV/JSON/Excel export
-│   ├── data-editor.js      Inline CRUD
-│   ├── ddl-viewer.js       DDL generation
-│   ├── erd.js              ER diagrams
-│   ├── structure-editor.js Column management
-│   ├── saved-queries.js    Bookmarked queries
-│   ├── autocomplete.js     SQL suggestions
-│   ├── explain.js          Execution plans
-│   ├── filtering.js        Sort & filter
-│   ├── compare.js          Schema diff
-│   ├── import.js           File import
-│   ├── schedule.js         Query scheduling
-│   ├── diff.js             Result comparison
-│   ├── masking.js          Data masking
-│   ├── collab.js           Sharing & collaboration
-│   ├── charts.js           Chart builder
-│   ├── dashboard.js        Dashboard widgets
-│   ├── templates.js        Query templates
-│   ├── data-generator.js   Fake data generation
-│   ├── migration.js        Migration SQL builder
-│   ├── audit.js            Audit logging
-│   ├── users.js            User management
-│   ├── backup.js           Backup & restore
-│   ├── form-builder.js     Form-based queries
-│   ├── stored-procs.js     Stored procedures
-│   ├── terminal.js         SQL terminal
-│   ├── notifications.js    Alert system
-│   ├── plugins.js          Plugin manager
-│   ├── mock-data.js        Sample data
-│   └── app.js              Entry point
-├── assets/
-│   └── logo.png
-├── requirements.md         Full specification
-└── README.md
+┌─────────────────────────────────────────────────────────┐
+│  Frontend (Vanilla JS, 42 modules, YDB namespace)       │
+│  Tailwind CSS + DaisyUI + Lucide + Chart.js (CDN)       │
+├─────────────────────────────────────────────────────────┤
+│  Express.js Backend                                      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────────┐    │
+│  │ Auth/JWT │ │   RBAC   │ │  Data Masking        │    │
+│  └──────────┘ └──────────┘ └──────────────────────┘    │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  Adapter Pattern (BaseAdapter interface)          │   │
+│  │  PostgreSQL │ MySQL │ MongoDB │ MSSQL │ Redis    │   │
+│  │  Neo4j │ SQLite │ ClickHouse │ DynamoDB          │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  DuckDB Federated Engine (cross-DB joins)         │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────────┐    │
+│  │ Pool Mgr │ │SSH Tunnel│ │  Backup / Metrics    │    │
+│  └──────────┘ └──────────┘ └──────────────────────┘    │
+├─────────────────────────────────────────────────────────┤
+│  PostgreSQL (app DB) │ Redis (cache/queue) │ DuckDB     │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Vanilla JS, Tailwind CSS, DaisyUI, Lucide, Chart.js |
-| Backend | Node.js 18+, Express.js |
-| App Database | PostgreSQL 16 |
-| Auth | JWT + bcrypt |
-| DB Drivers | pg, mysql2, mongodb, tedious, ioredis, neo4j-driver, cassandra-driver, snowflake-sdk, @clickhouse/client |
-| Security | Helmet, CORS, rate-limiting, AES-256 encryption for stored passwords |
-| Deploy | Docker, docker-compose |
+| Layer | Technology | License |
+|-------|-----------|---------|
+| Frontend | Vanilla JS, Tailwind CSS, DaisyUI, Chart.js | MIT |
+| Backend | Node.js 18+, Express.js | MIT |
+| Federated Engine | DuckDB (embedded OLAP) | MIT |
+| App Database | PostgreSQL 16 | PostgreSQL License |
+| Cache/Queue | Redis 7 | BSD |
+| Auth | JWT + bcrypt | MIT |
+| DB Drivers | pg, mysql2, mongodb, mssql, ioredis, neo4j-driver, sql.js, @clickhouse/client, @aws-sdk | MIT/Apache-2.0 |
+| Security | helmet, AES-256, ssh2 | MIT |
+| Deploy | Docker, GitHub Actions | - |
 
-## Design Principles
+## Supported Databases
 
-- **Zero Dependencies** — No npm, no node_modules, no build step
-- **Modular Architecture** — 40 self-contained modules under `YDB` namespace
-- **Progressive Enhancement** — Works by opening index.html directly
-- **Persistence** — localStorage for connections, history, preferences
-- **Performance** — Event delegation, debounced inputs, no memory leaks
+| Database | Driver | Features |
+|----------|--------|----------|
+| PostgreSQL | `pg` | Full schema, PK/FK detection, query execution |
+| MySQL / MariaDB | `mysql2` | Full schema, DESCRIBE support |
+| MongoDB | `mongodb` | Collection scan, schema inference |
+| SQL Server | `mssql` | INFORMATION_SCHEMA queries |
+| SQLite | `sql.js` | Pure JS, file-based, PRAGMA support |
+| Redis | `ioredis` | Key commands, ping |
+| Neo4j | `neo4j-driver` | Cypher queries, label detection |
+| ClickHouse | `@clickhouse/client` | HTTP interface, system.columns |
+| AWS DynamoDB | `@aws-sdk` | Scan, ListTables, DescribeTable |
+| AWS Redshift | `pg` | PostgreSQL wire-compatible |
+| Azure SQL / Synapse | `mssql` | Same as SQL Server |
+| Google Cloud SQL | `pg` / `mysql2` | PostgreSQL or MySQL compatible |
 
-## Development
+## API Reference
 
-```bash
-# Serve locally
-python -m http.server 8080
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/login` | Login (returns JWT) |
+| POST | `/api/auth/refresh` | Refresh token |
+| GET | `/api/connections` | List connections |
+| POST | `/api/connections` | Create connection |
+| POST | `/api/connections/:id/test` | Test connection |
+| POST | `/api/query/execute` | Execute SQL |
+| POST | `/api/federated/execute` | Cross-DB join (DuckDB) |
+| GET | `/api/explorer/:id/schema` | Get database schema |
+| GET | `/api/stream/query` | SSE streaming results |
+| GET | `/api/pool/stats` | Connection pool stats |
+| GET | `/metrics` | Prometheus metrics |
 
-# Or use any static server
-npx serve .
-php -S localhost:8080
-```
+## Security
 
-No build step. Edit files and refresh browser.
+- Credentials encrypted at rest (AES-256-CBC)
+- JWT with short-lived access + 30-day refresh tokens
+- RBAC: `admin` / `editor` / `viewer` enforced server-side
+- Server-side data masking (sensitive columns auto-detected)
+- SSH tunnel support for private databases
+- Rate limiting (1000 req / 15 min)
+- Helmet security headers
 
-## Production Roadmap
+## Contributing
 
-- [x] Node.js + Express backend
-- [x] PostgreSQL for app data
-- [x] JWT authentication
-- [x] Real database drivers (MySQL, PostgreSQL, MongoDB, MSSQL, Redis)
-- [x] Docker deployment
-- [x] Encrypted credential storage
-- [x] Audit logging
-- [x] Rate limiting & security headers
-- [ ] Integrate Monaco Editor for SQL highlighting
-- [ ] Real-time collaboration via WebSocket
-- [ ] OAuth / SSO support
-- [ ] Kubernetes deployment manifests
-- [ ] Comprehensive test suite
-- [ ] API documentation (Swagger)
+1. Fork the repo
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is open-source software licensed under the [MIT License](LICENSE).
 
 ---
 

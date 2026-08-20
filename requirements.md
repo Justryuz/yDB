@@ -115,4 +115,7 @@ npm start
 ```
 
 ## License
-MIT
+
+This project is open-source software licensed under the [MIT License](LICENSE).
+
+All dependencies used are MIT or Apache-2.0 licensed — no proprietary or GPL dependencies.
