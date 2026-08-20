@@ -9,7 +9,7 @@ const router = express.Router();
 const db = require('../db/pool');
 const config = require('../config');
 const { authenticate } = require('../middleware/auth');
-const { getClient } = require('../services/db-clients');
+const poolManager = require('../services/pool-manager');
 const { withTunnel } = require('../services/ssh-tunnel');
 
 router.use(authenticate);
@@ -46,7 +46,6 @@ router.post('/execute', async (req, res) => {
         const conn = connResult.rows[0];
         const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         const options = conn.options || {};
-        const client = getClient(conn.db_type);
 
         // Apply SSH tunnel if configured
         const { opts, cleanup } = await withTunnel(
@@ -55,24 +54,26 @@ router.post('/execute', async (req, res) => {
         );
 
         try {
-            const result = await client.execute(opts, sql);
+            // Use pool manager for persistent connections
+            const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+            const result = await adapter.query(sql);
 
             // Log to audit
             await db.query(
                 'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
-                [req.user.id, connectionId, sql, result.error ? 'error' : 'success', result.duration || 0, result.rowCount || 0]
+                [req.user.id, connectionId, sql, 'success', result.duration || 0, result.rowCount || 0]
             );
 
-            if (result.error) {
-                return res.status(400).json({ error: result.error });
-            }
-
-            res.json({
-                columns: result.columns,
-                data: result.data,
-                duration: result.duration,
-                rowCount: result.rowCount
-            });
+            res.json(result);
+        } catch (queryErr) {
+            // Log failed query
+            await db.query(
+                'INSERT INTO audit_log (user_id, connection_id, sql_text, status, error_message) VALUES ($1, $2, $3, $4, $5)',
+                [req.user.id, connectionId, sql, 'error', queryErr.message]
+            );
+            // Release broken connection from pool
+            await poolManager.release(connectionId);
+            res.status(400).json({ error: queryErr.message });
         } finally {
             cleanup();
         }

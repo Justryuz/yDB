@@ -40,6 +40,13 @@ app.use('/api/import', require('./routes/import'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/audit', require('./routes/audit'));
 
+// Pool stats (admin only)
+const { authenticate, authorize } = require('./middleware/auth');
+const poolManager = require('./services/pool-manager');
+app.get('/api/pool/stats', authenticate, authorize('admin'), (req, res) => {
+    res.json(poolManager.getStats());
+});
+
 // ── Serve Frontend (Static Files) ─────────────────────────
 app.use(express.static(path.join(__dirname, '..'), {
     index: 'index.html'
@@ -59,7 +66,7 @@ app.use((err, req, res, next) => {
 });
 
 // ── Start Server ──────────────────────────────────────────
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
     console.log(`
 ╔══════════════════════════════════════════╗
 ║   yDB Server v${config.env === 'production' ? '1.0.0' : 'DEV'}                     ║
@@ -72,5 +79,17 @@ app.listen(config.port, () => {
 ╚══════════════════════════════════════════╝
     `);
 });
+
+// ── Graceful Shutdown ─────────────────────────────────────
+async function shutdown(signal) {
+    console.log(`\n[Server] ${signal} received. Shutting down...`);
+    server.close();
+    await poolManager.releaseAll();
+    const { closeAll } = require('./services/ssh-tunnel');
+    closeAll();
+    process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 module.exports = app;
