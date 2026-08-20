@@ -9,6 +9,7 @@ const router = express.Router();
 const db = require('../db/pool');
 const config = require('../config');
 const { authenticate } = require('../middleware/auth');
+const { applyMasking } = require('../middleware/masking');
 const poolManager = require('../services/pool-manager');
 const { withTunnel } = require('../services/ssh-tunnel');
 
@@ -58,13 +59,16 @@ router.post('/execute', async (req, res) => {
             const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
             const result = await adapter.query(sql);
 
+            // Apply server-side masking based on role
+            const maskedResult = applyMasking(result, req.user.role);
+
             // Log to audit
             await db.query(
                 'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
                 [req.user.id, connectionId, sql, 'success', result.duration || 0, result.rowCount || 0]
             );
 
-            res.json(result);
+            res.json(maskedResult);
         } catch (queryErr) {
             // Log failed query
             await db.query(

@@ -5,7 +5,7 @@ services:
   ydb:
     build: .
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -14,20 +14,26 @@ services:
       - PG_HOST=postgres
       - PG_PORT=5432
       - PG_USER=ydb
-      - PG_PASSWORD=ydb_secret
+      - PG_PASSWORD=${PG_PASSWORD:-ydb_secret}
       - PG_DATABASE=ydb_app
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-32-char-encryption-key-here-ok!}
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - ./backups:/app/backups
 
   # ── PostgreSQL (App Database) ────────────────────────────
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ydb
-      POSTGRES_PASSWORD: ydb_secret
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-ydb_secret}
       POSTGRES_DB: ydb_app
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -40,5 +46,21 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Redis (Cache, Queue, Sessions) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  redisdata:

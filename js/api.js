@@ -178,5 +178,50 @@ YDB.API = {
             }
             return data;
         });
+    },
+
+    // ══════════════════════════════════════════════════════════
+    // SSE STREAMING
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Stream a query result via SSE (Server-Sent Events).
+     * @param {string|number} connectionId
+     * @param {string} sql
+     * @param {Object} callbacks - { onColumns, onBatch, onDone, onError }
+     * @returns {EventSource} — call .close() to cancel
+     */
+    stream: function (connectionId, sql, callbacks) {
+        var url = this.baseURL + '/stream/query?connectionId=' + encodeURIComponent(connectionId)
+            + '&sql=' + encodeURIComponent(sql)
+            + '&token=' + encodeURIComponent(this.token || '');
+
+        var es = new EventSource(url);
+
+        es.addEventListener('columns', function (e) {
+            if (callbacks.onColumns) callbacks.onColumns(JSON.parse(e.data));
+        });
+
+        es.addEventListener('batch', function (e) {
+            if (callbacks.onBatch) callbacks.onBatch(JSON.parse(e.data));
+        });
+
+        es.addEventListener('done', function (e) {
+            var data = JSON.parse(e.data);
+            if (callbacks.onDone) callbacks.onDone(data);
+            es.close();
+        });
+
+        es.addEventListener('error', function (e) {
+            if (e.data) {
+                var data = JSON.parse(e.data);
+                if (callbacks.onError) callbacks.onError(data.error || 'Stream error');
+            } else {
+                if (callbacks.onError) callbacks.onError('Connection lost');
+            }
+            es.close();
+        });
+
+        return es;
     }
 };

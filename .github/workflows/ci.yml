@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ydb
+          POSTGRES_PASSWORD: ydb_secret
+          POSTGRES_DB: ydb_app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Syntax check (all server JS)
+        working-directory: ./server
+        run: |
+          find . -name "*.js" -not -path "./node_modules/*" | xargs -I {} node --check {}
+
+      - name: Initialize database
+        working-directory: ./server
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: ydb
+          PG_PASSWORD: ydb_secret
+          PG_DATABASE: ydb_app
+        run: node db/init.js
+
+      - name: Seed database
+        working-directory: ./server
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: ydb
+          PG_PASSWORD: ydb_secret
+          PG_DATABASE: ydb_app
+        run: node db/seed.js
+
+      - name: Start server and test health
+        working-directory: ./server
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: ydb
+          PG_PASSWORD: ydb_secret
+          PG_DATABASE: ydb_app
+          JWT_SECRET: ci-test-secret
+          PORT: 3000
+        run: |
+          node server.js &
+          sleep 3
+          curl -f http://localhost:3000/metrics || exit 1
+          echo "Server health check passed"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t ydb:test .

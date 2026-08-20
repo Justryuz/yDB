@@ -39,12 +39,40 @@ app.use('/api/export', require('./routes/export'));
 app.use('/api/import', require('./routes/import'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/audit', require('./routes/audit'));
+app.use('/api/stream', require('./routes/stream'));
 
 // Pool stats (admin only)
 const { authenticate, authorize } = require('./middleware/auth');
 const poolManager = require('./services/pool-manager');
 app.get('/api/pool/stats', authenticate, authorize('admin'), (req, res) => {
     res.json(poolManager.getStats());
+});
+
+// Backup endpoints (admin only)
+const backup = require('./services/backup');
+app.get('/api/backup/list', authenticate, authorize('admin'), (req, res) => {
+    res.json(backup.listBackups());
+});
+app.post('/api/backup/create', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const filepath = await backup.backupAppDatabase();
+        res.json({ success: true, filepath });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Start backup scheduler in production
+if (config.env === 'production') {
+    backup.startScheduledBackup();
+}
+
+// Metrics endpoint (Prometheus-compatible)
+const metrics = require('./services/metrics');
+app.get('/metrics', (req, res) => {
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(metrics.toPrometheus());
+});
+app.get('/api/metrics', authenticate, authorize('admin'), (req, res) => {
+    res.json(metrics.getAll());
 });
 
 // ── Serve Frontend (Static Files) ─────────────────────────

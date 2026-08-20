@@ -47,8 +47,15 @@ router.post('/login', async (req, res) => {
             { expiresIn: config.jwt.expiresIn }
         );
 
+        const refreshToken = jwt.sign(
+            { id: user.id },
+            config.jwt.secret + '_refresh',
+            { expiresIn: '30d' }
+        );
+
         res.json({
             token,
+            refreshToken,
             user: { id: user.id, username: user.username, email: user.email, role: user.role }
         });
     } catch (err) {
@@ -86,6 +93,38 @@ router.post('/register', async (req, res) => {
             return res.status(409).json({ error: 'Username or email already exists' });
         }
         res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/auth/refresh
+ * Body: { refreshToken }
+ * Returns new access token.
+ */
+router.post('/refresh', async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) return res.status(400).json({ error: 'Refresh token required' });
+
+        // Verify refresh token (longer expiry)
+        const payload = jwt.verify(refreshToken, config.jwt.secret + '_refresh');
+        
+        // Check if user still active
+        const result = await db.query('SELECT id, username, role, active FROM users WHERE id = $1', [payload.id]);
+        if (!result.rows.length || !result.rows[0].active) {
+            return res.status(403).json({ error: 'Account disabled or not found' });
+        }
+
+        const user = result.rows[0];
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            config.jwt.secret,
+            { expiresIn: config.jwt.expiresIn }
+        );
+
+        res.json({ token });
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid refresh token' });
     }
 });
 
