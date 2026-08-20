@@ -48,6 +48,19 @@ router.post('/execute', async (req, res) => {
         const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         const options = conn.options || {};
 
+        // Strip database prefixes from SQL (e.g. "ydb_app.customers" → "customers")
+        // This handles copy-pasted cross-DB SQL when executing against a single connection
+        let cleanSql = sql;
+        const allConns = await db.query('SELECT database_name FROM connections WHERE user_id = $1', [req.user.id]);
+        allConns.rows.forEach(c => {
+            if (c.database_name) {
+                const prefix = new RegExp(c.database_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.', 'gi');
+                cleanSql = cleanSql.replace(prefix, '');
+            }
+        });
+        // Also remove comments
+        cleanSql = cleanSql.replace(/^--.*$/gm, '').trim();
+
         // Apply SSH tunnel if configured
         const { opts, cleanup } = await withTunnel(
             { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
@@ -57,7 +70,7 @@ router.post('/execute', async (req, res) => {
         try {
             // Use pool manager for persistent connections
             const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
-            const result = await adapter.query(sql);
+            const result = await adapter.query(cleanSql);
 
             // Apply server-side masking based on role
             const maskedResult = applyMasking(result, req.user.role);
