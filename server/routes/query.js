@@ -48,18 +48,13 @@ router.post('/execute', async (req, res) => {
         const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         const options = conn.options || {};
 
-        // Strip database prefixes from SQL (e.g. "ydb_app.customers" → "customers")
-        // This handles copy-pasted cross-DB SQL when executing against a single connection
-        let cleanSql = sql;
-        const allConns = await db.query('SELECT database_name FROM connections WHERE user_id = $1', [req.user.id]);
-        allConns.rows.forEach(c => {
-            if (c.database_name) {
-                const prefix = new RegExp(c.database_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.', 'gi');
-                cleanSql = cleanSql.replace(prefix, '');
-            }
-        });
-        // Also remove comments
-        cleanSql = cleanSql.replace(/^--.*$/gm, '').trim();
+        // Strip ONLY the active connection's database prefix from SQL
+        // (handles copy-pasted cross-DB SQL when executing against single connection)
+        let cleanSql = sql.replace(/^--.*$/gm, '').trim();
+        if (conn.database_name) {
+            const prefix = new RegExp(conn.database_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.', 'gi');
+            cleanSql = cleanSql.replace(prefix, '');
+        }
 
         // Apply SSH tunnel if configured
         const { opts, cleanup } = await withTunnel(

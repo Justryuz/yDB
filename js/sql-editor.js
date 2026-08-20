@@ -26,6 +26,25 @@ YDB.SQLEditor = {
         var container = document.getElementById('sql-results');
         var conn = YDB.State.activeConnection;
 
+        if (!conn) {
+            container.innerHTML = '<div class="alert alert-warning text-sm m-2">Select a connection in the sidebar first</div>';
+            return;
+        }
+
+        // Detect cross-DB query (has db_name.table patterns from multiple databases)
+        var dbPrefixes = sql.match(/\b\w+\.\w+\.\w+/g); // matches db.table.column patterns
+        if (dbPrefixes) {
+            var uniqueDBs = [];
+            dbPrefixes.forEach(function (p) {
+                var db = p.split('.')[0];
+                if (uniqueDBs.indexOf(db) < 0) uniqueDBs.push(db);
+            });
+            if (uniqueDBs.length > 1) {
+                // Cross-DB detected but executing against single connection - warn and strip
+                YDB.UI.toast('Cross-DB query detected. Executing against: ' + conn.name, 'info');
+            }
+        }
+
         // Use real API if online and connection selected
         if (YDB.API.isOnline() && YDB.API.token && conn && conn.id) {
             YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
