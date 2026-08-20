@@ -78,7 +78,7 @@ YDB.Connections = {
     },
 
     select: function (id) {
-        var conn = YDB.State.connections.find(function (c) { return c.id === id; });
+        var conn = YDB.State.connections.find(function (c) { return c.id == id; });
         if (!conn) return;
         YDB.State.activeConnection = conn;
         YDB.State.activeTable = null;
@@ -166,8 +166,24 @@ YDB.Connections = {
 
     remove: function (id) {
         if (!confirm('Delete this connection?')) return;
-        YDB.State.connections = YDB.State.connections.filter(function (c) { return c.id !== id; });
-        if (YDB.State.activeConnection && YDB.State.activeConnection.id === id) {
+        var self = this;
+
+        // Delete from API if online
+        if (YDB.API.isOnline() && YDB.API.token) {
+            YDB.API.del('/connections/' + id).then(function () {
+                self._removeLocal(id);
+            }).catch(function (err) {
+                YDB.UI.toast('Delete failed: ' + err.message, 'error');
+            });
+        } else {
+            this._removeLocal(id);
+        }
+    },
+
+    _removeLocal: function (id) {
+        // Use == for loose comparison (string vs number)
+        YDB.State.connections = YDB.State.connections.filter(function (c) { return c.id != id; });
+        if (YDB.State.activeConnection && YDB.State.activeConnection.id == id) {
             YDB.State.activeConnection = null;
             YDB.State.activeTable = null;
             YDB.Explorer.clear();
