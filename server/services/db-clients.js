@@ -13,7 +13,7 @@ const pgClient = {
     },
     async execute(opts, sql) {
         const { Pool } = require('pg');
-        const pool = new Pool({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database });
+        const pool = new Pool({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database, connectionTimeoutMillis: 10000, query_timeout: 30000 });
         try {
             const start = Date.now();
             const result = await pool.query(sql);
@@ -22,11 +22,14 @@ const pgClient = {
     },
     async getSchemas(opts) {
         const { Pool } = require('pg');
-        const pool = new Pool({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database });
+        const pool = new Pool({ host: opts.host, port: opts.port, user: opts.user, password: opts.password, database: opts.database, connectionTimeoutMillis: 10000 });
         try {
+            // Exclude yDB internal tables
+            const excludeTables = ['users', 'connections', 'saved_queries', 'audit_log', 'schedules'];
             const tables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name");
             const schema = { tables: {} };
             for (const row of tables.rows) {
+                if (excludeTables.includes(row.table_name)) continue;
                 const cols = await pool.query("SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", [row.table_name]);
                 schema.tables[row.table_name] = { columns: cols.rows.map(c => ({ name: c.column_name, type: c.data_type.toUpperCase(), nullable: c.is_nullable === 'YES', key: '' })) };
             }
