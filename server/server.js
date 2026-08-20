@@ -40,6 +40,7 @@ app.use('/api/import', require('./routes/import'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/audit', require('./routes/audit'));
 app.use('/api/stream', require('./routes/stream'));
+app.use('/api/federated', require('./routes/federated'));
 
 // Pool stats (admin only)
 const { authenticate, authorize } = require('./middleware/auth');

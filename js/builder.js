@@ -233,17 +233,53 @@ YDB.Builder = {
         var conn = YDB.State.activeConnection;
         var container = document.getElementById('builder-results');
 
-        // Use API if online and connected
-        if (YDB.API.isOnline() && YDB.API.token && conn && conn.id) {
-            YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
-                .then(function (result) {
-                    if (!result.data || !result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
-                    YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
-                    document.getElementById('builder-export-btns').classList.remove('hidden');
-                    YDB.History.add(sql);
-                    YDB.UI.toast('Query executed: ' + result.rowCount + ' rows', 'success');
-                })
-                .catch(function (err) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>'; });
+        // Detect if cross-database (multiple connections involved)
+        var connIds = [];
+        YDB.State.canvasTables.forEach(function (t) { if (connIds.indexOf(t.connId) < 0) connIds.push(t.connId); });
+        var isCrossDb = connIds.length > 1;
+
+        if (YDB.API.isOnline() && YDB.API.token) {
+            if (isCrossDb && YDB.State.canvasJoins.length) {
+                // Federated query — use /api/federated/execute
+                var sources = YDB.State.canvasTables.map(function (t) {
+                    return { connectionId: t.connId, table: t.name, columns: t.selectedColumns };
+                });
+                var join = null;
+                if (YDB.State.canvasJoins.length) {
+                    var j = YDB.State.canvasJoins[0];
+                    var lt = YDB.State.canvasTables.find(function (t) { return t.id === j.leftId; });
+                    var rt = YDB.State.canvasTables.find(function (t) { return t.id === j.rightId; });
+                    join = {
+                        leftIdx: sources.findIndex(function (s) { return s.connectionId == lt.connId && s.table === lt.name; }),
+                        rightIdx: sources.findIndex(function (s) { return s.connectionId == rt.connId && s.table === rt.name; }),
+                        leftCol: j.leftCol,
+                        rightCol: j.rightCol,
+                        type: j.type.replace(' JOIN', '')
+                    };
+                }
+                YDB.API.post('/federated/execute', { sources: sources, join: join })
+                    .then(function (result) {
+                        if (!result.data || !result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+                        YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+                        document.getElementById('builder-export-btns').classList.remove('hidden');
+                        YDB.History.add(sql);
+                        YDB.UI.toast('Federated query: ' + result.rowCount + ' rows', 'success');
+                    })
+                    .catch(function (err) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>'; });
+            } else if (conn && conn.id) {
+                // Single-DB query
+                YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
+                    .then(function (result) {
+                        if (!result.data || !result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+                        YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+                        document.getElementById('builder-export-btns').classList.remove('hidden');
+                        YDB.History.add(sql);
+                        YDB.UI.toast('Query executed: ' + result.rowCount + ' rows', 'success');
+                    })
+                    .catch(function (err) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>'; });
+            } else {
+                container.innerHTML = '<div class="alert alert-warning text-sm m-2">Select a connection first</div>';
+            }
         } else {
             // Fallback to mock engine
             var result = YDB.QueryEngine.execute(sql);
