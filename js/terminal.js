@@ -57,16 +57,31 @@ YDB.Terminal = {
             else { output.innerHTML += '<div class="text-error">Connection not found: ' + connName + '</div>'; }
         } else {
             // Execute SQL
-            var result = YDB.QueryEngine.execute(cmd);
-            if (result.error) { output.innerHTML += '<div class="text-error">' + result.error + '</div>'; }
-            else {
-                var h = '<table class="data-table my-1"><thead><tr>' + result.columns.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
-                result.data.slice(0, 20).forEach(function (row) {
-                    h += '<tr>' + result.columns.map(function (c) { var v = row[c]; return '<td>' + (v == null ? 'NULL' : v) + '</td>'; }).join('') + '</tr>';
-                });
-                h += '</tbody></table><div class="text-xs text-base-content/50">' + result.data.length + ' rows</div>';
-                output.innerHTML += h;
-                YDB.Audit.log(cmd);
+            var conn = YDB.State.activeConnection;
+            if (YDB.API.isOnline() && YDB.API.token && conn) {
+                YDB.API.post('/query/execute', { connectionId: conn.id, sql: cmd })
+                    .then(function (result) {
+                        var h = '<table class="data-table my-1"><thead><tr>' + result.columns.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+                        result.data.slice(0, 20).forEach(function (row) {
+                            h += '<tr>' + result.columns.map(function (c) { var v = row[c]; return '<td>' + (v == null ? 'NULL' : v) + '</td>'; }).join('') + '</tr>';
+                        });
+                        h += '</tbody></table><div class="text-xs text-base-content/50">' + result.data.length + ' rows</div>';
+                        output.innerHTML += h;
+                        output.scrollTop = output.scrollHeight;
+                    })
+                    .catch(function (err) { output.innerHTML += '<div class="text-error">' + err.message + '</div>'; output.scrollTop = output.scrollHeight; });
+            } else {
+                var result = YDB.QueryEngine.execute(cmd);
+                if (result.error) { output.innerHTML += '<div class="text-error">' + result.error + '</div>'; }
+                else {
+                    var h = '<table class="data-table my-1"><thead><tr>' + result.columns.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>';
+                    result.data.slice(0, 20).forEach(function (row) {
+                        h += '<tr>' + result.columns.map(function (c) { var v = row[c]; return '<td>' + (v == null ? 'NULL' : v) + '</td>'; }).join('') + '</tr>';
+                    });
+                    h += '</tbody></table><div class="text-xs text-base-content/50">' + result.data.length + ' rows</div>';
+                    output.innerHTML += h;
+                    YDB.Audit.log(cmd);
+                }
             }
         }
 

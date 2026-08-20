@@ -46,27 +46,45 @@ YDB.Notifications = {
     checkAll: function () {
         var self = this;
         var triggered = 0;
-        this.rules.forEach(function (rule) {
-            if (!rule.active) return;
-            var result = YDB.QueryEngine.execute(rule.query);
-            if (result.error) return;
+        var conn = YDB.State.activeConnection;
 
-            var rowCount = result.data.length;
-            // Simple condition evaluation
-            var condMet = false;
-            try {
-                condMet = eval(rule.condition.replace('rowCount', rowCount));
-            } catch (e) { condMet = false; }
+        var checkRule = function (rule, callback) {
+            if (!rule.active) { callback(); return; }
 
-            if (condMet) {
-                triggered++;
-                self.alerts.unshift({ id: Date.now(), rule: rule.name, message: rule.condition + ' (got: ' + rowCount + ')', timestamp: new Date().toISOString(), read: false });
+            if (YDB.API.isOnline() && YDB.API.token && conn) {
+                YDB.API.post('/query/execute', { connectionId: conn.id, sql: rule.query })
+                    .then(function (result) {
+                        var rowCount = result.data ? result.data.length : 0;
+                        self._evaluateRule(rule, rowCount);
+                        callback();
+                    }).catch(function () { callback(); });
+            } else {
+                var result = YDB.QueryEngine.execute(rule.query);
+                if (!result.error) self._evaluateRule(rule, result.data.length);
+                callback();
             }
-        });
-        this._save();
-        this.render();
-        if (triggered) YDB.UI.toast(triggered + ' alert(s) triggered!', 'warning');
-        else YDB.UI.toast('All checks passed', 'success');
+        };
+
+        // Process rules sequentially
+        var idx = 0;
+        var next = function () {
+            if (idx >= self.rules.length) {
+                self._save(); self.render();
+                if (triggered) YDB.UI.toast(triggered + ' alert(s) triggered!', 'warning');
+                else YDB.UI.toast('All checks passed', 'success');
+                return;
+            }
+            checkRule(self.rules[idx], function () { idx++; next(); });
+        };
+        next();
+    },
+
+    _evaluateRule: function (rule, rowCount) {
+        var condMet = false;
+        try { condMet = eval(rule.condition.replace('rowCount', rowCount)); } catch (e) {}
+        if (condMet) {
+            this.alerts.unshift({ id: Date.now(), rule: rule.name, message: rule.condition + ' (got: ' + rowCount + ')', timestamp: new Date().toISOString(), read: false });
+        }
     },
 
     getUnreadCount: function () { return this.alerts.filter(function (a) { return !a.read; }).length; },

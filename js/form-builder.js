@@ -97,11 +97,22 @@ YDB.FormBuilder = {
         document.getElementById('fb-generated-sql').textContent = sql;
 
         // Execute
-        var result = YDB.QueryEngine.execute(sql);
-        if (result.error) { document.getElementById('fb-results').innerHTML = '<div class="alert alert-error text-sm">' + result.error + '</div>'; return; }
-        YDB.UI.renderTable('fb-results', result.columns, result.columns, result.data);
-        YDB.Audit.log(sql);
-        YDB.UI.toast('Query executed: ' + result.data.length + ' rows', 'success');
+        var conn = YDB.State.activeConnection;
+        if (YDB.API.isOnline() && YDB.API.token && conn) {
+            YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
+                .then(function (result) {
+                    if (!result.data.length) { document.getElementById('fb-results').innerHTML = '<div class="alert alert-info text-sm">0 rows</div>'; return; }
+                    YDB.UI.renderTable('fb-results', result.columns, result.columns, result.data);
+                    YDB.UI.toast('Query executed: ' + result.data.length + ' rows', 'success');
+                })
+                .catch(function (err) { document.getElementById('fb-results').innerHTML = '<div class="alert alert-error text-sm">' + err.message + '</div>'; });
+        } else {
+            var result = YDB.QueryEngine.execute(sql);
+            if (result.error) { document.getElementById('fb-results').innerHTML = '<div class="alert alert-error text-sm">' + result.error + '</div>'; return; }
+            YDB.UI.renderTable('fb-results', result.columns, result.columns, result.data);
+            YDB.Audit.log(sql);
+            YDB.UI.toast('Query executed: ' + result.data.length + ' rows', 'success');
+        }
     },
 
     clear: function () {

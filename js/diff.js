@@ -15,19 +15,29 @@ YDB.Diff = {
     run: function () {
         var sqlA = document.getElementById('diff-sql-a').value.trim();
         var sqlB = document.getElementById('diff-sql-b').value.trim();
-
         if (!sqlA || !sqlB) { YDB.UI.toast('Enter both queries', 'warning'); return; }
 
-        var resultA = YDB.QueryEngine.execute(sqlA);
-        var resultB = YDB.QueryEngine.execute(sqlB);
+        var self = this;
+        var conn = YDB.State.activeConnection;
 
-        this._renderSide('diff-result-a', resultA, 'Query A');
-        this._renderSide('diff-result-b', resultB, 'Query B');
-
-        // Summary
-        var countA = resultA.error ? 0 : resultA.data.length;
-        var countB = resultB.error ? 0 : resultB.data.length;
-        YDB.UI.toast('A: ' + countA + ' rows | B: ' + countB + ' rows', 'info');
+        if (YDB.API.isOnline() && YDB.API.token && conn) {
+            Promise.all([
+                YDB.API.post('/query/execute', { connectionId: conn.id, sql: sqlA }),
+                YDB.API.post('/query/execute', { connectionId: conn.id, sql: sqlB })
+            ]).then(function (results) {
+                self._renderSide('diff-result-a', results[0], 'Query A');
+                self._renderSide('diff-result-b', results[1], 'Query B');
+                YDB.UI.toast('A: ' + results[0].data.length + ' rows | B: ' + results[1].data.length + ' rows', 'info');
+            }).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
+        } else {
+            var resultA = YDB.QueryEngine.execute(sqlA);
+            var resultB = YDB.QueryEngine.execute(sqlB);
+            this._renderSide('diff-result-a', resultA, 'Query A');
+            this._renderSide('diff-result-b', resultB, 'Query B');
+            var countA = resultA.error ? 0 : resultA.data.length;
+            var countB = resultB.error ? 0 : resultB.data.length;
+            YDB.UI.toast('A: ' + countA + ' rows | B: ' + countB + ' rows', 'info');
+        }
     },
 
     _renderSide: function (containerId, result, label) {

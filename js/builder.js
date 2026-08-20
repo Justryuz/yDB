@@ -33,7 +33,15 @@ YDB.Builder = {
     renderTablesList: function () {
         var el = document.getElementById('builder-tables-list');
         var conns = YDB.State.connections.filter(function (c) { return YDB.MockData.schemas[c.id]; });
-        if (!conns.length) { el.innerHTML = '<p class="text-base-content/50 text-xs">No connections available</p>'; return; }
+        if (!conns.length) {
+            // No cached schemas yet — show message
+            if (YDB.State.connections.length) {
+                el.innerHTML = '<p class="text-base-content/50 text-xs">Click a connection in sidebar first to load its schema</p>';
+            } else {
+                el.innerHTML = '<p class="text-base-content/50 text-xs">No connections available</p>';
+            }
+            return;
+        }
 
         el.innerHTML = conns.map(function (conn) {
             var db = YDB.Config.DB_TYPES[conn.type] || { name: conn.type, color: '#666' };
