@@ -208,13 +208,32 @@ YDB.Builder = {
     generateAndRun: function () {
         var sql = document.getElementById('generated-sql').textContent;
         if (sql.indexOf('-- Select columns') === 0 || sql.indexOf('-- Drag') === 0) { YDB.UI.toast('Select columns first', 'warning'); return; }
-        var result = YDB.QueryEngine.execute(sql);
-        if (result.error) { document.getElementById('builder-results').innerHTML = '<div class="alert alert-error text-sm m-2">' + result.error + '</div>'; return; }
-        YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
-        document.getElementById('builder-export-btns').classList.remove('hidden');
-        YDB.History.add(sql);
-        YDB.Audit.log(sql);
-        YDB.UI.toast('Query executed: ' + result.data.length + ' rows', 'success');
+
+        var conn = YDB.State.activeConnection;
+        var container = document.getElementById('builder-results');
+
+        // Use API if online and connected
+        if (YDB.API.isOnline() && YDB.API.token && conn && conn.id) {
+            YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
+                .then(function (result) {
+                    if (!result.data || !result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+                    YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+                    document.getElementById('builder-export-btns').classList.remove('hidden');
+                    YDB.History.add(sql);
+                    YDB.UI.toast('Query executed: ' + result.rowCount + ' rows', 'success');
+                })
+                .catch(function (err) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>'; });
+        } else {
+            // Fallback to mock engine
+            var result = YDB.QueryEngine.execute(sql);
+            if (result.error) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + result.error + '</div>'; return; }
+            if (!result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+            YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+            document.getElementById('builder-export-btns').classList.remove('hidden');
+            YDB.History.add(sql);
+            YDB.Audit.log(sql);
+            YDB.UI.toast('Query executed: ' + result.data.length + ' rows', 'success');
+        }
     },
 
     _autoRerun: function () {

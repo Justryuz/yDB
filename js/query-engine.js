@@ -39,7 +39,8 @@ YDB.QueryEngine = {
         // Build result data
         var data = [];
         if (tables.length === 1) {
-            tables[0].table.data.forEach(function (row) {
+            var tblData = tables[0].table.data || [];
+            tblData.forEach(function (row) {
                 var nr = {}; cols.forEach(function (c) { if (row.hasOwnProperty(c.col)) nr[c.display] = row[c.col]; }); data.push(nr);
             });
         } else {
@@ -50,7 +51,8 @@ YDB.QueryEngine = {
                 conditions.push({ lt: lp[lp.length-2], lc: lp[lp.length-1], rt: rp[rp.length-2], rc: rp[rp.length-1] });
             }
             // Nested loop join simulation
-            tables[0].table.data.forEach(function (pRow) {
+            var primaryData = tables[0].table.data || [];
+            primaryData.forEach(function (pRow) {
                 var merged = {};
                 cols.forEach(function (c) { if (c.table === tables[0].name && pRow.hasOwnProperty(c.col)) merged[c.display] = pRow[c.col]; });
                 for (var i = 1; i < tables.length; i++) {
