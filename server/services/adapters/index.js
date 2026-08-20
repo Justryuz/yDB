@@ -8,6 +8,10 @@ const MySQLAdapter = require('./mysql');
 const MongoDBAdapter = require('./mongodb');
 const MSSQLAdapter = require('./mssql');
 const RedisAdapter = require('./redis');
+const Neo4jAdapter = require('./neo4j');
+const SQLiteAdapter = require('./sqlite');
+const DynamoDBAdapter = require('./dynamodb');
+const ClickHouseAdapter = require('./clickhouse');
 
 const adapterMap = {
     postgresql: PostgreSQLAdapter,
@@ -15,12 +19,19 @@ const adapterMap = {
     mariadb: MySQLAdapter,
     mongodb: MongoDBAdapter,
     mssql: MSSQLAdapter,
-    redis: RedisAdapter
+    azuresql: MSSQLAdapter,      // Azure SQL uses same MSSQL driver
+    synapse: MSSQLAdapter,       // Azure Synapse uses same MSSQL driver
+    redis: RedisAdapter,
+    neo4j: Neo4jAdapter,
+    sqlite: SQLiteAdapter,
+    dynamodb: DynamoDBAdapter,
+    redshift: PostgreSQLAdapter, // Redshift is PostgreSQL-compatible
+    clickhouse: ClickHouseAdapter
 };
 
 /**
  * Create an adapter instance for a given DB type and connection options.
- * @param {string} dbType - Database type (postgresql, mysql, mongodb, etc.)
+ * @param {string} dbType - Database type
  * @param {Object} opts - { host, port, user, password, database }
  * @returns {BaseAdapter}
  */
