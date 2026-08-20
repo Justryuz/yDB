@@ -8,7 +8,7 @@ YDB.Compare = {
     },
 
     populateSelects: function () {
-        var conns = YDB.State.connections.filter(function (c) { return YDB.MockData.schemas[c.id]; });
+        var conns = YDB.State.connections;
         var opts = '<option value="">Select...</option>' + conns.map(function (c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
         document.getElementById('compare-left').innerHTML = opts;
         document.getElementById('compare-right').innerHTML = opts;
@@ -22,6 +22,8 @@ YDB.Compare = {
 
         var leftSchema = YDB.MockData.schemas[leftId];
         var rightSchema = YDB.MockData.schemas[rightId];
+        if (!leftSchema || !leftSchema.tables) { YDB.UI.toast('Source schema not loaded. Click it in Explorer first.', 'warning'); return; }
+        if (!rightSchema || !rightSchema.tables) { YDB.UI.toast('Target schema not loaded. Click it in Explorer first.', 'warning'); return; }
         var leftTables = Object.keys(leftSchema.tables);
         var rightTables = Object.keys(rightSchema.tables);
 

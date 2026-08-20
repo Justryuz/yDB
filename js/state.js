@@ -73,7 +73,7 @@ YDB.State = {
      */
     load: function () {
         var c = localStorage.getItem('ydb-connections');
-        this.connections = c ? JSON.parse(c) : YDB.MockData.sampleConnections.slice();
+        this.connections = c ? JSON.parse(c) : [];
 
         var h = localStorage.getItem('ydb-history');
         this.queryHistory = h ? JSON.parse(h) : [];

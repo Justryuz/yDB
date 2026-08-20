@@ -12,7 +12,7 @@ YDB.ERD = {
         var sel = document.getElementById('erd-connection');
         sel.innerHTML = '<option value="">Select connection...</option>';
         YDB.State.connections.forEach(function (c) {
-            if (YDB.MockData.schemas[c.id]) sel.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
+            sel.innerHTML += '<option value="' + c.id + '">' + c.name + '</option>';
         });
     },
 
@@ -21,6 +21,11 @@ YDB.ERD = {
         if (!connId) { YDB.UI.toast('Select a connection', 'warning'); return; }
 
         var schema = YDB.MockData.schemas[connId];
+        if (!schema || !schema.tables) {
+            YDB.UI.toast('Click the connection in Explorer first to load its schema', 'warning');
+            return;
+        }
+
         var rels = YDB.MockData.relationships[connId] || [];
         var tables = Object.keys(schema.tables);
         var canvas = document.getElementById('erd-canvas');

@@ -19,6 +19,10 @@ YDB.StructureEditor = {
         this.modifications = [];
 
         var schema = YDB.MockData.schemas[connId];
+        if (!schema || !schema.tables || !schema.tables[tableName]) {
+            YDB.UI.toast('Schema not loaded. Click table in Explorer first.', 'warning');
+            return;
+        }
         var table = schema.tables[tableName];
         document.getElementById('struct-table-name').textContent = tableName;
 

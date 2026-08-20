@@ -9,7 +9,7 @@ YDB.Migration = {
     },
 
     populateSelects: function () {
-        var conns = YDB.State.connections.filter(function (c) { return YDB.MockData.schemas[c.id]; });
+        var conns = YDB.State.connections;
         var opts = '<option value="">Select...</option>' + conns.map(function (c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
         document.getElementById('migration-source').innerHTML = opts;
         document.getElementById('migration-target').innerHTML = opts;
@@ -19,6 +19,11 @@ YDB.Migration = {
         var srcId = document.getElementById('migration-source').value;
         var tgtId = document.getElementById('migration-target').value;
         if (!srcId || !tgtId) { YDB.UI.toast('Select both source and target', 'warning'); return; }
+
+        var src = YDB.MockData.schemas[srcId];
+        var tgt = YDB.MockData.schemas[tgtId];
+        if (!src || !src.tables) { YDB.UI.toast('Source schema not loaded. Click it in Explorer first.', 'warning'); return; }
+        if (!tgt || !tgt.tables) { YDB.UI.toast('Target schema not loaded. Click it in Explorer first.', 'warning'); return; }
 
         var src = YDB.MockData.schemas[srcId];
         var tgt = YDB.MockData.schemas[tgtId];
