@@ -188,13 +188,26 @@ YDB.Builder = {
         var from = multi ? first.dbName + '.' + first.name : first.name;
 
         if (S.canvasJoins.length) {
+            var joinedTables = [first.name]; // Track tables already in query
             S.canvasJoins.forEach(function (j) {
                 var lt = S.canvasTables.find(function (t) { return t.id === j.leftId; });
                 var rt = S.canvasTables.find(function (t) { return t.id === j.rightId; });
                 if (!lt || !rt) return;
-                var lp = multi ? lt.dbName + '.' + lt.name : lt.name;
-                var rp = multi ? rt.dbName + '.' + rt.name : rt.name;
-                joins.push(j.type + ' ' + rp + ' ON ' + lp + '.' + j.leftCol + ' = ' + rp + '.' + j.rightCol);
+
+                // Determine which side is the new table to join
+                var newTable, existingTable, newCol, existingCol;
+                if (joinedTables.indexOf(rt.name) < 0) {
+                    newTable = rt; existingTable = lt; newCol = j.rightCol; existingCol = j.leftCol;
+                } else if (joinedTables.indexOf(lt.name) < 0) {
+                    newTable = lt; existingTable = rt; newCol = j.leftCol; existingCol = j.rightCol;
+                } else {
+                    return; // Both tables already joined, skip
+                }
+
+                var np = multi ? newTable.dbName + '.' + newTable.name : newTable.name;
+                var ep = multi ? existingTable.dbName + '.' + existingTable.name : existingTable.name;
+                joins.push(j.type + ' ' + np + ' ON ' + ep + '.' + existingCol + ' = ' + np + '.' + newCol);
+                joinedTables.push(newTable.name);
             });
         }
 
