@@ -1,7 +1,8 @@
 /**
  * @file routes/federated.js
- * @description Federated query execution — joins data from multiple database connections.
- * Splits query into sub-queries per connection, fetches data, joins in-memory.
+ * @description Federated query execution via DuckDB — joins data from multiple database connections.
+ * Fetches data from each source, loads into DuckDB temp tables, executes real SQL JOIN.
+ * Supports 10+ databases in a single query.
  */
 
 const express = require('express');
@@ -13,6 +14,7 @@ const { authenticate } = require('../middleware/auth');
 const { applyMasking } = require('../middleware/masking');
 const poolManager = require('../services/pool-manager');
 const { withTunnel } = require('../services/ssh-tunnel');
+const FederatedEngine = require('../services/federated-engine');
 
 router.use(authenticate);
 
@@ -31,29 +33,27 @@ function decrypt(text) {
  * Body: {
  *   sources: [
  *     { connectionId, table, columns: ['col1','col2'] },
- *     { connectionId, table, columns: ['col1','col2'] }
+ *     ...
  *   ],
- *   join: { leftIdx: 0, leftCol: 'id', rightIdx: 1, rightCol: 'user_id', type: 'INNER' }
+ *   join: { leftIdx: 0, leftCol: 'id', rightIdx: 1, rightCol: 'user_id', type: 'INNER' },
+ *   sql: "(optional) Custom SQL to run against DuckDB after loading all sources"
  * }
- *
- * Executes sub-queries against each connection, then joins results in-memory.
  */
 router.post('/execute', async (req, res) => {
     try {
-        const { sources, join } = req.body;
+        const { sources, join, sql: customSql } = req.body;
         if (!sources || sources.length < 1) {
             return res.status(400).json({ error: 'At least one source required' });
         }
 
-        // Fetch data from each source
-        const datasets = [];
-        for (const source of sources) {
+        // Fetch data from each source in parallel
+        const datasets = await Promise.all(sources.map(async (source, idx) => {
             const connResult = await db.query(
                 'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
                 [source.connectionId, req.user.id]
             );
             if (!connResult.rows.length) {
-                return res.status(404).json({ error: `Connection ${source.connectionId} not found` });
+                throw new Error(`Connection ${source.connectionId} not found`);
             }
 
             const conn = connResult.rows[0];
@@ -68,58 +68,53 @@ router.post('/execute', async (req, res) => {
             try {
                 const adapter = await poolManager.getAdapter(source.connectionId, conn.db_type, opts);
                 const cols = source.columns && source.columns.length ? source.columns.join(', ') : '*';
-                const sql = `SELECT ${cols} FROM ${source.table} LIMIT 1000`;
-                const result = await adapter.query(sql);
-                datasets.push({ columns: result.columns, data: result.data, table: source.table });
-            } catch (err) {
+                const fetchSql = `SELECT ${cols} FROM ${source.table} LIMIT 10000`;
+                const result = await adapter.query(fetchSql);
+                return {
+                    name: source.table,
+                    columns: result.columns,
+                    data: result.data
+                };
+            } finally {
                 cleanup();
-                return res.status(400).json({ error: `Error querying ${source.table}: ${err.message}` });
             }
-            cleanup();
-        }
+        }));
 
-        // If no join specified, return first dataset
-        if (!join || datasets.length < 2) {
+        // Use DuckDB for the join
+        const engine = new FederatedEngine();
+
+        let result;
+        if (customSql) {
+            // User provided custom SQL — execute directly against DuckDB
+            result = await engine.execute(datasets, customSql);
+        } else if (join && datasets.length >= 2) {
+            // Standard join between 2 sources
+            const leftDs = datasets[join.leftIdx || 0];
+            const rightDs = datasets[join.rightIdx || 1];
+            result = await engine.join(leftDs, rightDs, {
+                leftCol: join.leftCol,
+                rightCol: join.rightCol,
+                type: join.type || 'INNER'
+            });
+        } else {
+            // Single source — just return as-is
             const d = datasets[0];
-            const masked = applyMasking({ columns: d.columns, data: d.data }, req.user.role);
-            return res.json({ ...masked, duration: 0, rowCount: d.data.length });
+            result = { columns: d.columns, data: d.data, duration: 0, rowCount: d.data.length };
         }
 
-        // Perform in-memory join
-        const left = datasets[join.leftIdx || 0];
-        const right = datasets[join.rightIdx || 1];
-        const joinType = (join.type || 'INNER').toUpperCase();
+        // Apply server-side masking
+        const masked = applyMasking(result, req.user.role);
 
-        const joinedData = [];
-        const joinedColumns = [
-            ...left.columns.map(c => left.table + '.' + c),
-            ...right.columns.map(c => right.table + '.' + c)
-        ];
+        // Audit log
+        await db.query(
+            'INSERT INTO audit_log (user_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5)',
+            [req.user.id, 'FEDERATED: ' + sources.map(s => s.table).join(' + '), 'success', result.duration, result.rowCount]
+        );
 
-        for (const lRow of left.data) {
-            const lVal = lRow[join.leftCol];
-            const matches = right.data.filter(rRow => rRow[join.rightCol] == lVal);
-
-            if (matches.length) {
-                for (const rRow of matches) {
-                    const merged = {};
-                    left.columns.forEach(c => { merged[left.table + '.' + c] = lRow[c]; });
-                    right.columns.forEach(c => { merged[right.table + '.' + c] = rRow[c]; });
-                    joinedData.push(merged);
-                }
-            } else if (joinType === 'LEFT' || joinType === 'LEFT OUTER') {
-                const merged = {};
-                left.columns.forEach(c => { merged[left.table + '.' + c] = lRow[c]; });
-                right.columns.forEach(c => { merged[right.table + '.' + c] = null; });
-                joinedData.push(merged);
-            }
-        }
-
-        const masked = applyMasking({ columns: joinedColumns, data: joinedData }, req.user.role);
-        res.json({ ...masked, duration: 0, rowCount: joinedData.length });
+        res.json(masked);
 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: err.message });
     }
 });
 
