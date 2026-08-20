@@ -38,7 +38,13 @@ router.get('/:connectionId/schema', async (req, res) => {
         }
 
         const conn = connResult.rows[0];
-        const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        let password = '';
+        try {
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        } catch (decryptErr) {
+            return res.status(500).json({ error: 'Failed to decrypt connection credentials. The encryption key may have changed. Please re-enter the password for this connection.' });
+        }
+
         const client = getClient(conn.db_type);
 
         const schema = await client.getSchemas({
@@ -75,10 +81,15 @@ router.get('/:connectionId/tables/:tableName/data', async (req, res) => {
         }
 
         const conn = connResult.rows[0];
-        const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        let password = '';
+        try {
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
+        } catch (decryptErr) {
+            return res.status(500).json({ error: 'Failed to decrypt credentials. Please re-enter the password for this connection.' });
+        }
+
         const client = getClient(conn.db_type);
 
-        // Execute SELECT with pagination
         const sql = `SELECT * FROM ${tableName} LIMIT ${perPage} OFFSET ${offset}`;
         const result = await client.execute(
             { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },

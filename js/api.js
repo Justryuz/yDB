@@ -33,16 +33,16 @@ YDB.API = {
 
     /**
      * Check if backend API is reachable.
-     * Sets this.online flag. Silently fails if unreachable.
+     * Uses the public setup-status endpoint (no auth required).
+     * Sets this.online flag.
      */
     _checkOnline: function () {
         var self = this;
         try {
-            fetch(this.baseURL + '/auth/me', {
+            fetch(this.baseURL + '/auth/setup-status', {
                 method: 'GET',
-                headers: this._headers()
+                headers: { 'Content-Type': 'application/json' }
             }).then(function (res) {
-                // If we get JSON back (not HTML), backend is online
                 var ct = res.headers.get('content-type') || '';
                 self.online = ct.indexOf('application/json') >= 0;
             }).catch(function () {
@@ -165,7 +165,6 @@ YDB.API = {
     _handleResponse: function (res) {
         var ct = res.headers.get('content-type') || '';
         if (ct.indexOf('application/json') < 0) {
-            // Not JSON — backend probably not running
             var err = new Error('Backend not available');
             err.status = 0;
             return Promise.reject(err);
@@ -174,6 +173,8 @@ YDB.API = {
             if (!res.ok) {
                 var err = new Error(data.error || 'Request failed');
                 err.status = res.status;
+                err.details = data.details || null;
+                err.retryAfter = data.retryAfter || null;
                 throw err;
             }
             return data;

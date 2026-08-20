@@ -190,7 +190,7 @@ YDB.APIClient = {
 
         // Built-in yDB API examples
         var builtIn = [
-            { name: 'Login', method: 'POST', url: '/api/auth/login', body: '{"username":"admin","password":"admin123"}' },
+            { name: 'Login', method: 'POST', url: '/api/auth/login', body: '{"username":"admin","password":"your-password-here"}' },
             { name: 'My Profile', method: 'GET', url: '/api/auth/me', body: '' },
             { name: 'List Connections', method: 'GET', url: '/api/connections', body: '' },
             { name: 'Execute Query', method: 'POST', url: '/api/query/execute', body: '{"connectionId":2,"sql":"SELECT * FROM customers LIMIT 5"}' },

@@ -149,18 +149,9 @@ YDB.Connections = {
 
         if (YDB.API.isOnline() && YDB.API.token) {
             var req = editId ? YDB.API.put('/connections/' + editId, data) : YDB.API.post('/connections', data);
-            req.then(done).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
+            req.then(done).catch(function (err) { YDB.UI.toast(err.message || 'Failed to save connection', 'error'); });
         } else {
-            // Offline mode — save to localStorage
-            var localData = { id: editId || 'conn-' + Date.now(), name: data.name, type: data.db_type, host: data.host, port: data.port, username: data.username, password: data.password, database: data.database_name };
-            if (editId) {
-                var idx = YDB.State.connections.findIndex(function (c) { return c.id === editId; });
-                if (idx >= 0) YDB.State.connections[idx] = localData;
-            } else {
-                YDB.State.connections.push(localData);
-            }
-            YDB.State.save();
-            done();
+            YDB.UI.toast('Backend not available — cannot save connection', 'error');
         }
     },
 
@@ -198,12 +189,29 @@ YDB.Connections = {
         var connId = document.getElementById('conn-edit-id').value;
         YDB.UI.toast('Testing connection...', 'info');
 
-        if (YDB.API.isOnline() && YDB.API.token && connId) {
+        if (!YDB.API.isOnline() || !YDB.API.token) {
+            YDB.UI.toast('Backend not available — cannot test connection', 'error');
+            return;
+        }
+
+        if (connId) {
+            // Test saved connection by ID
             YDB.API.post('/connections/' + connId + '/test', {}).then(function (res) {
                 YDB.UI.toast(res.message, res.success ? 'success' : 'error');
-            }).catch(function (err) { YDB.UI.toast(err.message, 'error'); });
+            }).catch(function (err) { YDB.UI.toast(err.message || 'Test failed', 'error'); });
         } else {
-            setTimeout(function () { YDB.UI.toast('Connection successful! (mock)', 'success'); }, 800);
+            // Test with form details directly (not yet saved)
+            var data = {
+                db_type: document.getElementById('conn-type').value,
+                host: document.getElementById('conn-host').value,
+                port: parseInt(document.getElementById('conn-port').value) || 0,
+                username: document.getElementById('conn-user').value,
+                password: document.getElementById('conn-pass').value,
+                database_name: document.getElementById('conn-db').value
+            };
+            YDB.API.post('/connections/test', data).then(function (res) {
+                YDB.UI.toast(res.message, res.success ? 'success' : 'error');
+            }).catch(function (err) { YDB.UI.toast(err.message || 'Test failed', 'error'); });
         }
     }
 };

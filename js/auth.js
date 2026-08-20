@@ -1,7 +1,7 @@
 /**
  * @file auth.js
- * @description Authentication module — login, logout, splash screen.
- * Uses API when backend is online, falls back to mock credentials when offline.
+ * @description Authentication module — login, logout, force-password-change.
+ * Requires backend to be online. No mock/offline login fallback.
  * @module YDB.Auth
  */
 
@@ -22,30 +22,51 @@ YDB.Auth = {
             self.logout();
         });
 
-        // Check for existing session — try API token first, then mock session
-        if (YDB.API.token && YDB.API.isOnline()) {
-            YDB.API.get('/auth/me').then(function (user) {
-                YDB.State.user = user.username;
-                self.showSplashThenApp();
-            }).catch(function () {
-                YDB.API.clearToken();
-                self._checkMockSession();
-            });
-        } else {
-            self._checkMockSession();
-        }
+        // Check backend availability and existing session
+        this._checkBackendAndSession();
     },
 
-    /** @private Check mock session (localStorage-based) */
-    _checkMockSession: function () {
-        if (sessionStorage.getItem('ydb-user')) {
-            YDB.State.user = sessionStorage.getItem('ydb-user');
-            this.showSplashThenApp();
-        }
+    /** @private Check if backend is reachable and validate existing token */
+    _checkBackendAndSession: function () {
+        var self = this;
+
+        // First check setup status (public endpoint)
+        fetch(YDB.API.baseURL + '/auth/setup-status')
+            .then(function (res) {
+                if (res.ok) return res.json();
+                throw new Error('Backend not reachable');
+            })
+            .then(function (data) {
+                YDB.API.online = true;
+
+                // If we have a stored token, validate it
+                if (YDB.API.token) {
+                    YDB.API.get('/auth/me').then(function (user) {
+                        YDB.State.user = user.username;
+                        if (user.force_password_change) {
+                            self._showPasswordChange();
+                        } else {
+                            self.showSplashThenApp();
+                        }
+                    }).catch(function () {
+                        YDB.API.clearToken();
+                        // Show login form
+                    });
+                }
+            })
+            .catch(function () {
+                // Backend not available — show error on login page
+                YDB.API.online = false;
+                var loginErr = document.getElementById('login-error');
+                if (loginErr) {
+                    loginErr.textContent = 'Backend server is not available. Please ensure the server is running.';
+                    loginErr.classList.remove('hidden');
+                }
+            });
     },
 
     /**
-     * Login — try API first, fallback to mock.
+     * Login — always uses the API. No mock fallback.
      */
     login: function () {
         var self = this;
@@ -57,36 +78,78 @@ YDB.Auth = {
             return;
         }
 
-        // Try API login
         YDB.API.post('/auth/login', { username: username, password: password })
             .then(function (data) {
                 YDB.API.online = true;
                 YDB.API.setToken(data.token);
                 YDB.State.user = data.user.username;
-                self.showSplashThenApp();
+
+                if (data.forcePasswordChange) {
+                    self._showPasswordChange();
+                } else {
+                    self.showSplashThenApp();
+                }
             })
             .catch(function (err) {
-                if (err.status === 401 || err.status === 403) {
-                    // Real auth rejection from backend
+                if (err.status === 429) {
+                    YDB.UI.toast('Too many attempts. Please wait and try again.', 'error');
+                } else if (err.status === 401 || err.status === 403) {
                     YDB.UI.toast(err.message || 'Invalid credentials', 'error');
                 } else {
-                    // Backend error or unreachable — fallback to mock
-                    console.log('[Auth] API unavailable, using mock mode:', err.message);
-                    self._mockLogin(username, password);
+                    YDB.UI.toast('Server unavailable: ' + (err.message || 'Connection failed'), 'error');
                 }
             });
     },
 
-    /** @private Mock login for offline/demo mode */
-    _mockLogin: function (username, password) {
-        if (username === 'admin' && (password === 'password' || password === 'admin123')) {
-            YDB.State.user = username;
-            sessionStorage.setItem('ydb-user', username);
-            this.showSplashThenApp();
-            YDB.UI.toast('Running in offline mode (mock data)', 'info');
-        } else {
-            YDB.UI.toast('Invalid credentials. Try admin/password', 'error');
-        }
+    /** @private Show forced password change dialog */
+    _showPasswordChange: function () {
+        var self = this;
+        var html = '<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" id="password-change-overlay">'
+            + '<div class="bg-base-100 rounded-lg p-6 w-96 shadow-xl">'
+            + '<h3 class="text-lg font-bold mb-2">Change Your Password</h3>'
+            + '<p class="text-sm text-base-content/70 mb-4">You must change your password before continuing.</p>'
+            + '<form id="form-change-password" class="space-y-3">'
+            + '<input type="password" id="cp-current" class="input input-bordered w-full" placeholder="Current password" required>'
+            + '<input type="password" id="cp-new" class="input input-bordered w-full" placeholder="New password (min 12 chars)" required>'
+            + '<input type="password" id="cp-confirm" class="input input-bordered w-full" placeholder="Confirm new password" required>'
+            + '<p class="text-xs text-base-content/60">Requires: 12+ chars, uppercase, lowercase, number, special character</p>'
+            + '<div id="cp-error" class="text-error text-sm hidden"></div>'
+            + '<button type="submit" class="btn btn-primary w-full">Change Password</button>'
+            + '</form></div></div>';
+
+        document.body.insertAdjacentHTML('beforeend', html);
+
+        document.getElementById('form-change-password').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var current = document.getElementById('cp-current').value;
+            var newPass = document.getElementById('cp-new').value;
+            var confirm = document.getElementById('cp-confirm').value;
+            var errEl = document.getElementById('cp-error');
+
+            if (newPass !== confirm) {
+                errEl.textContent = 'Passwords do not match';
+                errEl.classList.remove('hidden');
+                return;
+            }
+
+            YDB.API.post('/auth/change-password', { currentPassword: current, newPassword: newPass })
+                .then(function (data) {
+                    // Update token with full-access token
+                    if (data.token) YDB.API.setToken(data.token);
+                    document.getElementById('password-change-overlay').remove();
+                    YDB.UI.toast('Password changed successfully', 'success');
+
+                    // Complete setup if needed
+                    YDB.API.post('/auth/complete-setup', {}).catch(function () { /* ok if not admin */ });
+
+                    self.showSplashThenApp();
+                })
+                .catch(function (err) {
+                    errEl.textContent = err.message || 'Failed to change password';
+                    if (err.details) errEl.textContent += ': ' + err.details.join(', ');
+                    errEl.classList.remove('hidden');
+                });
+        });
     },
 
     /**
@@ -140,7 +203,6 @@ YDB.Auth = {
         YDB.Plugins.render();
 
         YDB.UI.icons();
-        var mode = YDB.API.isOnline() ? '' : ' (offline mode)';
-        YDB.UI.toast('Welcome, ' + YDB.State.user + '!' + mode, 'success');
+        YDB.UI.toast('Welcome, ' + YDB.State.user + '!', 'success');
     }
 };

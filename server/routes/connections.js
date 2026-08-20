@@ -123,8 +123,35 @@ router.delete('/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/connections/test
+ * Test connection with provided details (without saving).
+ * Body: { db_type, host, port, username, password, database_name }
+ */
+router.post('/test', async (req, res) => {
+    try {
+        const { db_type, host, port, username, password, database_name } = req.body;
+        if (!db_type || !host) {
+            return res.status(400).json({ success: false, message: 'db_type and host required' });
+        }
+
+        const client = getClient(db_type);
+        const success = await client.testConnection({
+            host,
+            port: port || 5432,
+            user: username || '',
+            password: password || '',
+            database: database_name || ''
+        });
+
+        res.json({ success, message: success ? 'Connection successful' : 'Connection failed' });
+    } catch (err) {
+        res.json({ success: false, message: err.message });
+    }
+});
+
+/**
  * POST /api/connections/:id/test
- * Test a connection by attempting to connect.
+ * Test a saved connection by attempting to connect.
  */
 router.post('/:id/test', async (req, res) => {
     try {

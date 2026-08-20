@@ -36,8 +36,16 @@ app.use('/api/query', createRateLimiter('query'));
 app.use('/api/stream', createRateLimiter('query'));
 app.use('/api/federated', createRateLimiter('query'));
 
-// General API rate limit for all other endpoints
-app.use('/api', createRateLimiter('general'));
+// General API rate limit — excludes routes that already have dedicated limiters
+app.use('/api/connections', createRateLimiter('general'));
+app.use('/api/explorer', createRateLimiter('general'));
+app.use('/api/export', createRateLimiter('general'));
+app.use('/api/import', createRateLimiter('general'));
+app.use('/api/users', createRateLimiter('general'));
+app.use('/api/audit', createRateLimiter('general'));
+app.use('/api/backup', createRateLimiter('general'));
+app.use('/api/pool', createRateLimiter('general'));
+app.use('/api/metrics', createRateLimiter('general'));
 
 // ── API Routes ────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
@@ -146,5 +154,14 @@ async function shutdown(signal) {
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Prevent unhandled rejections from crashing the server
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Server] Unhandled rejection:', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[Server] Uncaught exception:', err.message);
+    // Don't exit — keep serving
+});
 
 module.exports = app;
