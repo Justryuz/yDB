@@ -1,5 +1,20 @@
 version: '3.8'
 
+# ═══════════════════════════════════════════════════════════════
+# yDB Docker Compose
+#
+# REQUIRED: Set these environment variables before running:
+#   JWT_SECRET      — minimum 32 characters (generate with: openssl rand -hex 64)
+#   ENCRYPTION_KEY  — exactly 32 characters (generate with: openssl rand -hex 16)
+#   PG_PASSWORD     — strong database password
+#
+# Example:
+#   JWT_SECRET=$(openssl rand -hex 64) \
+#   ENCRYPTION_KEY=$(openssl rand -hex 16) \
+#   PG_PASSWORD=$(openssl rand -base64 24) \
+#   docker compose up -d
+# ═══════════════════════════════════════════════════════════════
+
 services:
   # ── yDB App Server ───────────────────────────────────────
   ydb:
@@ -9,16 +24,22 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-change-this-in-production-please}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - generate with: openssl rand -hex 64}
       - JWT_EXPIRES_IN=7d
       - PG_HOST=postgres
       - PG_PORT=5432
       - PG_USER=ydb
-      - PG_PASSWORD=${PG_PASSWORD:-ydb_secret}
+      - PG_PASSWORD=${PG_PASSWORD:?PG_PASSWORD is required}
       - PG_DATABASE=ydb_app
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-32-char-encryption-key-here-ok!}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required - generate with: openssl rand -hex 16}
       - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=info
+      - BACKUP_TARGET=${BACKUP_TARGET:-local}
+      - BACKUP_INTERVAL_HOURS=${BACKUP_INTERVAL_HOURS:-6}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      - RATE_LIMIT_AUTH=${RATE_LIMIT_AUTH:-10}
+      - RATE_LIMIT_QUERY=${RATE_LIMIT_QUERY:-200}
+      - RATE_LIMIT_GENERAL=${RATE_LIMIT_GENERAL:-500}
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,7 +54,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ydb
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-ydb_secret}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD is required}
       POSTGRES_DB: ydb_app
     volumes:
       - pgdata:/var/lib/postgresql/data

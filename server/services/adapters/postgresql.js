@@ -80,6 +80,37 @@ class PostgreSQLAdapter extends BaseAdapter {
             this.connected = false;
         }
     }
+
+    /**
+     * Cancel a running query using pg_cancel_backend.
+     * Requires access to the connection's process ID.
+     */
+    async cancel() {
+        if (this.connection && this.connection.processID) {
+            try {
+                // Create a separate connection to issue the cancel
+                const { Client } = require('pg');
+                const cancelClient = new Client({
+                    host: this.opts.host,
+                    port: this.opts.port,
+                    user: this.opts.user,
+                    password: this.opts.password,
+                    database: this.opts.database,
+                    connectionTimeoutMillis: 5000
+                });
+                await cancelClient.connect();
+                await cancelClient.query('SELECT pg_cancel_backend($1)', [this.connection.processID]);
+                await cancelClient.end();
+            } catch (err) {
+                console.warn('[PostgreSQL] Cancel failed:', err.message);
+                // Fallback: destroy the connection
+                if (this.connection && typeof this.connection.end === 'function') {
+                    this.connection.end();
+                }
+            }
+        }
+    }
+
 }
 
 module.exports = PostgreSQLAdapter;

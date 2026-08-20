@@ -7,7 +7,11 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "db:init": "node db/init.js",
-    "db:seed": "node db/seed.js"
+    "db:seed": "node db/seed.js",
+    "db:reset-admin": "node db/reset-admin.js",
+    "test": "jest --coverage --forceExit",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --coverage --forceExit --ci --reporters=default"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.665.0",
@@ -37,7 +41,9 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^6.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

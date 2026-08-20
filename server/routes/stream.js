@@ -1,27 +1,22 @@
 /**
  * @file routes/stream.js
  * @description SSE (Server-Sent Events) endpoint for streaming long-running query results.
- *
- * Client connects via EventSource:
- *   const es = new EventSource('/api/stream/query?connectionId=1&sql=SELECT...')
- *   es.onmessage = (e) => { const data = JSON.parse(e.data); }
- *
- * Events sent:
- *   - "columns": { columns: [...] } — sent once at start
- *   - "row": { row: {...} } — sent per row (for streaming)
- *   - "batch": { rows: [...], total: n } — sent in batches (default mode)
- *   - "done": { duration, rowCount } — query complete
- *   - "error": { error: "message" } — on failure
+ * Supports cancellation via execution ID.
  */
 
 const express = require('express');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../db/pool');
 const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const poolManager = require('../services/pool-manager');
 const { withTunnel } = require('../services/ssh-tunnel');
+const { logFromRequest } = require('../services/audit-log');
+
+/** Track active streaming executions */
+const activeStreams = new Map();
 
 function decrypt(text) {
     const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
@@ -36,11 +31,12 @@ function decrypt(text) {
 /**
  * GET /api/stream/query
  * Query params: connectionId, sql, batchSize (optional, default 100)
- * Returns SSE stream of query results.
+ * Returns SSE stream of query results with executionId in first event.
  */
 router.get('/query', authenticate, async (req, res) => {
     const { connectionId, sql } = req.query;
     const batchSize = parseInt(req.query.batchSize) || 100;
+    const executionId = uuidv4();
 
     if (!connectionId || !sql) {
         return res.status(400).json({ error: 'connectionId and sql required' });
@@ -50,20 +46,36 @@ router.get('/query', authenticate, async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    // Helper to send SSE event
     function send(event, data) {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        if (!aborted) {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        }
     }
 
-    // Handle client disconnect
     let aborted = false;
-    req.on('close', () => { aborted = true; });
+
+    // Track this stream for cancellation
+    activeStreams.set(executionId, { aborted: false, res });
+
+    // Send execution ID first so client can cancel
+    send('execution', { executionId });
+
+    // Handle client disconnect or cancellation
+    req.on('close', () => {
+        aborted = true;
+        activeStreams.delete(executionId);
+    });
 
     try {
-        // Get connection
+        // Record execution
+        await db.query(
+            'INSERT INTO query_executions (id, user_id, connection_id, sql_text, status) VALUES ($1, $2, $3, $4, $5)',
+            [executionId, req.user.id, connectionId, sql, 'running']
+        );
+
         const connResult = await db.query(
             'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
             [connectionId, req.user.id]
@@ -71,6 +83,7 @@ router.get('/query', authenticate, async (req, res) => {
         if (!connResult.rows.length) {
             send('error', { error: 'Connection not found' });
             res.end();
+            activeStreams.delete(executionId);
             return;
         }
 
@@ -87,35 +100,55 @@ router.get('/query', authenticate, async (req, res) => {
             const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
             const start = Date.now();
 
-            // Execute query
             const result = await adapter.query(sql);
 
-            if (aborted) { cleanup(); return; }
+            // Check if cancelled during execution
+            const streamCtx = activeStreams.get(executionId);
+            if (aborted || (streamCtx && streamCtx.aborted)) {
+                await db.query('UPDATE query_executions SET status = $1, completed_at = NOW() WHERE id = $2', ['cancelled', executionId]);
+                await logFromRequest(req, 'query.cancelled', 'query', { connectionId: parseInt(connectionId), queryText: sql, status: 'cancelled' });
+                cleanup();
+                activeStreams.delete(executionId);
+                res.end();
+                return;
+            }
 
-            // Send columns first
+            // Send columns
             send('columns', { columns: result.columns });
 
             // Stream data in batches
             const data = result.data;
             for (let i = 0; i < data.length; i += batchSize) {
-                if (aborted) break;
+                if (aborted || (activeStreams.get(executionId)?.aborted)) break;
                 const batch = data.slice(i, i + batchSize);
                 send('batch', { rows: batch, offset: i, total: data.length });
             }
 
-            // Done
             const duration = Date.now() - start;
-            send('done', { duration, rowCount: data.length });
+            send('done', { duration, rowCount: data.length, executionId });
+
+            // Mark completed
+            await db.query('UPDATE query_executions SET status = $1, completed_at = NOW() WHERE id = $2', ['completed', executionId]);
 
             // Audit log
-            await db.query(
-                'INSERT INTO audit_log (user_id, connection_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5, $6)',
-                [req.user.id, connectionId, sql, 'success', duration, data.length]
-            );
+            await logFromRequest(req, 'query.executed', 'query', {
+                connectionId: parseInt(connectionId),
+                queryText: sql,
+                status: 'success',
+                durationMs: duration,
+                rowsAffected: data.length
+            });
 
             cleanup();
         } catch (queryErr) {
             send('error', { error: queryErr.message });
+            await db.query('UPDATE query_executions SET status = $1, completed_at = NOW() WHERE id = $2', ['error', executionId]);
+            await logFromRequest(req, 'query.error', 'query', {
+                connectionId: parseInt(connectionId),
+                queryText: sql,
+                status: 'failure',
+                errorMessage: queryErr.message
+            });
             await poolManager.release(connectionId);
             cleanup();
         }
@@ -123,16 +156,59 @@ router.get('/query', authenticate, async (req, res) => {
         send('error', { error: err.message });
     }
 
+    activeStreams.delete(executionId);
     res.end();
 });
 
 /**
  * POST /api/stream/cancel
- * Cancel a running query (for future use with async query execution)
+ * Cancel a running streaming query.
+ * Body: { executionId }
  */
-router.post('/cancel', authenticate, (req, res) => {
-    // Placeholder for query cancellation
-    res.json({ success: true, message: 'Query cancellation requested' });
+router.post('/cancel', authenticate, async (req, res) => {
+    const { executionId } = req.body;
+
+    if (!executionId) {
+        return res.status(400).json({ error: 'executionId required' });
+    }
+
+    // Verify ownership
+    const execResult = await db.query(
+        'SELECT * FROM query_executions WHERE id = $1 AND user_id = $2 AND status = $3',
+        [executionId, req.user.id, 'running']
+    );
+
+    if (!execResult.rows.length) {
+        return res.status(404).json({ error: 'Running execution not found' });
+    }
+
+    // Mark as cancelled
+    const streamCtx = activeStreams.get(executionId);
+    if (streamCtx) {
+        streamCtx.aborted = true;
+        // End the SSE response
+        if (streamCtx.res && !streamCtx.res.writableEnded) {
+            streamCtx.res.write(`event: cancelled\ndata: ${JSON.stringify({ executionId })}\n\n`);
+            streamCtx.res.end();
+        }
+        activeStreams.delete(executionId);
+    }
+
+    await db.query('UPDATE query_executions SET status = $1, completed_at = NOW() WHERE id = $2', ['cancelled', executionId]);
+
+    // Release connection from pool
+    const execution = execResult.rows[0];
+    if (execution.connection_id) {
+        await poolManager.release(execution.connection_id);
+    }
+
+    await logFromRequest(req, 'query.cancelled', 'query', {
+        connectionId: execution.connection_id,
+        status: 'cancelled',
+        details: { executionId }
+    });
+
+    res.json({ success: true, message: 'Stream cancelled', executionId });
 });
 
 module.exports = router;

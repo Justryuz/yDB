@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
+  test:
     runs-on: ubuntu-latest
 
     services:
@@ -15,7 +15,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: ydb
-          POSTGRES_PASSWORD: ydb_secret
+          POSTGRES_PASSWORD: ydb_ci_secret_password
           POSTGRES_DB: ydb_app
         ports:
           - 5432:5432
@@ -41,7 +41,20 @@ jobs:
       - name: Syntax check (all server JS)
         working-directory: ./server
         run: |
-          find . -name "*.js" -not -path "./node_modules/*" | xargs -I {} node --check {}
+          find . -name "*.js" -not -path "./node_modules/*" -not -path "./tests/*" | xargs -I {} node --check {}
+
+      - name: Run unit tests with coverage
+        working-directory: ./server
+        env:
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
+          ENCRYPTION_KEY: 12345678901234567890123456789012
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: ydb
+          PG_PASSWORD: ydb_ci_secret_password
+          PG_DATABASE: ydb_app
+          NODE_ENV: test
+        run: npm run test:ci
 
       - name: Initialize database
         working-directory: ./server
@@ -49,39 +62,57 @@ jobs:
           PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: ydb
-          PG_PASSWORD: ydb_secret
+          PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
+          ENCRYPTION_KEY: 12345678901234567890123456789012
         run: node db/init.js
 
-      - name: Seed database
+      - name: Seed database (verify random password generation)
         working-directory: ./server
         env:
           PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: ydb
-          PG_PASSWORD: ydb_secret
+          PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
+          ENCRYPTION_KEY: 12345678901234567890123456789012
         run: node db/seed.js
 
-      - name: Start server and test health
+      - name: Verify server starts with required secrets
         working-directory: ./server
         env:
           PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: ydb
-          PG_PASSWORD: ydb_secret
+          PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
-          JWT_SECRET: ci-test-secret
+          JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
+          ENCRYPTION_KEY: 12345678901234567890123456789012
           PORT: 3000
+          NODE_ENV: production
         run: |
           node server.js &
           sleep 3
           curl -f http://localhost:3000/metrics || exit 1
           echo "Server health check passed"
 
+      - name: Verify server fails without secrets
+        working-directory: ./server
+        run: |
+          unset JWT_SECRET
+          unset ENCRYPTION_KEY
+          if node server.js 2>/dev/null; then
+            echo "ERROR: Server should have failed to start without secrets!"
+            exit 1
+          else
+            echo "PASS: Server correctly refuses to start without required secrets"
+          fi
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: test
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image

@@ -19,6 +19,14 @@ class BaseAdapter {
     /** Get database schema (tables + columns). Returns { tables: { name: { columns } } } */
     async getSchema() { throw new Error('getSchema() not implemented'); }
 
+    /** Cancel a running query (best-effort — not all adapters support this). */
+    async cancel() {
+        // Default: destroy the connection to force abort
+        if (this.connection && typeof this.connection.destroy === 'function') {
+            this.connection.destroy();
+        }
+    }
+
     /** Disconnect and clean up resources. */
     async disconnect() { throw new Error('disconnect() not implemented'); }
 

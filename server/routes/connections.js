@@ -1,6 +1,7 @@
 /**
  * @file routes/connections.js
  * @description CRUD for database connections + test connection.
+ * All mutations are logged to the audit trail.
  */
 
 const express = require('express');
@@ -10,6 +11,7 @@ const db = require('../db/pool');
 const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getClient } = require('../services/db-clients');
+const { logFromRequest } = require('../services/audit-log');
 
 router.use(authenticate);
 
@@ -63,6 +65,10 @@ router.post('/', async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, db_type, host, port, username, database_name`,
             [req.user.id, name, db_type, host, port, username, encPassword, database_name, JSON.stringify(options || {})]
         );
+        await logFromRequest(req, 'connection.created', 'connections', {
+            connectionId: result.rows[0].id,
+            details: { name, db_type, host }
+        });
         res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -91,6 +97,10 @@ router.put('/:id', async (req, res) => {
 
         const result = await db.query(query, params);
         if (!result.rows.length) return res.status(404).json({ error: 'Connection not found' });
+        await logFromRequest(req, 'connection.updated', 'connections', {
+            connectionId: parseInt(req.params.id),
+            details: { name, db_type, host }
+        });
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -103,6 +113,9 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         await db.query('DELETE FROM connections WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+        await logFromRequest(req, 'connection.deleted', 'connections', {
+            connectionId: parseInt(req.params.id)
+        });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

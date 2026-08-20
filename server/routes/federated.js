@@ -106,10 +106,14 @@ router.post('/execute', async (req, res) => {
         const masked = applyMasking(result, req.user.role);
 
         // Audit log
-        await db.query(
-            'INSERT INTO audit_log (user_id, sql_text, status, duration_ms, rows_affected) VALUES ($1, $2, $3, $4, $5)',
-            [req.user.id, 'FEDERATED: ' + sources.map(s => s.table).join(' + '), 'success', result.duration, result.rowCount]
-        );
+        const { logFromRequest } = require('../services/audit-log');
+        await logFromRequest(req, 'query.federated', 'query', {
+            queryText: 'FEDERATED: ' + sources.map(s => s.table).join(' + '),
+            status: 'success',
+            durationMs: result.duration,
+            rowsAffected: result.rowCount,
+            details: { sources: sources.map(s => ({ connectionId: s.connectionId, table: s.table })) }
+        });
 
         res.json(masked);
 

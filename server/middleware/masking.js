@@ -57,7 +57,7 @@ function maskValue(value, type) {
 function applyMasking(result, role) {
     // Admin sees everything unmasked
     if (role === 'admin') return result;
-    if (!result.columns || !result.data) return result;
+    if (!result || !result.columns || !result.data) return result;
 
     // Determine which columns need masking
     const maskMap = {};

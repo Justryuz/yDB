@@ -58,6 +58,38 @@ class MySQLAdapter extends BaseAdapter {
             this.connected = false;
         }
     }
+
+    /**
+     * Cancel a running query using KILL QUERY.
+     */
+    async cancel() {
+        if (this.connection) {
+            try {
+                const [rows] = await this.connection.query('SELECT CONNECTION_ID() as id');
+                const threadId = rows[0]?.id;
+                if (threadId) {
+                    // Need a separate connection to issue KILL
+                    const mysql = require('mysql2/promise');
+                    const killConn = await mysql.createConnection({
+                        host: this.opts.host,
+                        port: this.opts.port,
+                        user: this.opts.user,
+                        password: this.opts.password,
+                        database: this.opts.database,
+                        connectTimeout: 5000
+                    });
+                    await killConn.query(`KILL QUERY ${threadId}`);
+                    await killConn.end();
+                }
+            } catch (err) {
+                console.warn('[MySQL] Cancel failed:', err.message);
+                if (this.connection && typeof this.connection.destroy === 'function') {
+                    this.connection.destroy();
+                }
+            }
+        }
+    }
+
 }
 
 module.exports = MySQLAdapter;

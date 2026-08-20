@@ -1,6 +1,8 @@
 /**
  * @file server.js
  * @description yDB Express server entry point.
+ * Validates required secrets on startup, applies per-user rate limiting,
+ * and enforces first-run setup before full API access.
  */
 
 const express = require('express');
@@ -9,8 +11,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const path = require('path');
-const rateLimit = require('express-rate-limit');
-const config = require('./config');
+const config = require('./config'); // Will exit(1) if secrets are missing
 
 const app = express();
 
@@ -22,13 +23,21 @@ app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000,
-    message: { error: 'Too many requests, please try again later.' }
-});
-app.use('/api', limiter);
+// ── Per-User Rate Limiting ────────────────────────────────
+const { createRateLimiter } = require('./middleware/rate-limit');
+
+// Auth endpoints get the strictest limits (brute-force protection)
+app.use('/api/auth/login', createRateLimiter('auth'));
+app.use('/api/auth/register', createRateLimiter('auth'));
+app.use('/api/auth/refresh', createRateLimiter('auth'));
+
+// Query execution endpoints
+app.use('/api/query', createRateLimiter('query'));
+app.use('/api/stream', createRateLimiter('query'));
+app.use('/api/federated', createRateLimiter('query'));
+
+// General API rate limit for all other endpoints
+app.use('/api', createRateLimiter('general'));
 
 // ── API Routes ────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
@@ -56,8 +65,19 @@ app.get('/api/backup/list', authenticate, authorize('admin'), (req, res) => {
 });
 app.post('/api/backup/create', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const filepath = await backup.backupAppDatabase();
-        res.json({ success: true, filepath });
+        const result = await backup.backupAppDatabase();
+        const { logFromRequest } = require('./services/audit-log');
+        await logFromRequest(req, 'backup.created', 'backup', { status: 'success', details: { filepath: result } });
+        res.json({ success: true, filepath: result });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post('/api/backup/restore', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { filename, dryRun } = req.body;
+        const result = await backup.restoreAppDatabase(filename, dryRun);
+        const { logFromRequest } = require('./services/audit-log');
+        await logFromRequest(req, 'backup.restored', 'backup', { status: 'success', details: { filename, dryRun } });
+        res.json(result);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -98,13 +118,17 @@ app.use((err, req, res, next) => {
 const server = app.listen(config.port, () => {
     console.log(`
 ╔══════════════════════════════════════════╗
-║   yDB Server v${config.env === 'production' ? '1.0.0' : 'DEV'}                     ║
+║   yDB Server v1.0.0                      ║
 ║   Tame any database.                     ║
 ║                                          ║
 ║   Port: ${config.port}                              ║
 ║   Env:  ${config.env.padEnd(30)}║
 ║   API:  http://localhost:${config.port}/api          ║
 ║   UI:   http://localhost:${config.port}              ║
+║                                          ║
+║   Secrets: ✓ JWT_SECRET set              ║
+║            ✓ ENCRYPTION_KEY set          ║
+║   Rate Limits: per-user (role-based)     ║
 ╚══════════════════════════════════════════╝
     `);
 });
@@ -116,6 +140,8 @@ async function shutdown(signal) {
     await poolManager.releaseAll();
     const { closeAll } = require('./services/ssh-tunnel');
     closeAll();
+    const { limiter } = require('./middleware/rate-limit');
+    limiter.destroy();
     process.exit(0);
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
