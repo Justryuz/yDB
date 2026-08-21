@@ -118,24 +118,56 @@ yDB is hardened for production deployment. See [SECURITY.md](SECURITY.md) for fu
 - For unsupported backends: connection is destroyed to abort the query
 - Cancelled queries are logged to the audit trail with status `cancelled`
 
-### BI Copilot — Text-to-SQL (NLQ)
+## BI Copilot — Text-to-SQL (NLQ)
 
 Natural language interface for business users who don't know SQL:
 
 ```
-User: "Berapa jumlah jualan bulan lepas?"
-  ↓ AI translates to SQL ↓
-SQL: SELECT TO_CHAR(created_at, 'YYYY-MM') AS bulan, SUM(amount) AS jumlah
-     FROM transactions GROUP BY bulan ORDER BY bulan DESC LIMIT 12
-  ↓ Execute + Visualize ↓
-Result: Bar chart showing monthly totals
+User: "How many users registered this month?"
+  -> AI generates SQL:
+  SELECT COUNT(*) AS total FROM users
+  WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+  -> Executes against connected database
+  -> Returns: 33 (displayed as number card)
 ```
 
-- Supports **Bahasa Malaysia** and **English** questions
-- Auto-detects connected database schema for accurate SQL
+- Ask questions in plain English — get SQL + results + charts
+- Schema-aware: reads connected database to generate accurate queries
 - Smart chart selection: number, bar, line, pie, or table
+- Dynamic suggestions generated from your actual database schema
 - Pluggable AI backend: built-in heuristic, Amazon Bedrock (Claude), or OpenAI
-- No SQL knowledge needed — just ask your business question
+- No SQL knowledge needed — business users can self-serve analytics
+
+### Supported Question Patterns
+
+| Pattern | Example | Output |
+|---|---|---|
+| Count | "How many users?" | Single number |
+| Sum | "Total revenue this month" | Single number |
+| Trend | "Monthly transaction trend" | Bar/line chart |
+| Breakdown | "Breakdown by status" | Pie chart |
+| Top-N | "Top 10 merchants by amount" | Bar chart |
+| Recent | "Latest 20 transactions" | Table |
+| Search | "Find user john" | Table |
+| Time filter | "Orders last 30 days" | Filtered results |
+| Status filter | "Show pending payments" | Filtered results |
+
+### AI Provider Configuration
+
+```env
+# Built-in heuristic (default, no API key needed)
+NLQ_PROVIDER=builtin
+
+# Amazon Bedrock (Claude)
+NLQ_PROVIDER=bedrock
+NLQ_MODEL=anthropic.claude-3-haiku-20240307-v1:0
+NLQ_REGION=us-east-1
+
+# OpenAI compatible
+NLQ_PROVIDER=openai
+NLQ_API_KEY=sk-...
+NLQ_MODEL=gpt-4o-mini
+```
 
 ## Tech Stack
 

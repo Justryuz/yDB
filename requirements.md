@@ -59,11 +59,11 @@ yDB is a production-grade, web-based database management platform with multi-con
 
 ### AI / NLQ Layer (BI Copilot)
 - **Text-to-SQL**: User types business question → AI generates SQL → execute → visualize
-- **Multi-language**: Supports Bahasa Malaysia and English questions
 - **Schema-Aware**: Reads connected database schema for context-accurate SQL generation
+- **Dynamic Suggestions**: Analyzes schema to suggest relevant queries per table
 - **Smart Visualization**: Auto-detects appropriate chart type (number, bar, line, pie, table)
-- **Pluggable Provider**: Built-in patterns, Amazon Bedrock (Claude), OpenAI API
-- **Conversation Context**: Maintains chat history for follow-up questions
+- **Pluggable Provider**: Built-in pattern matching, Amazon Bedrock (Claude), OpenAI API
+- **Cross-table Detection**: Identifies JOIN relationships via foreign keys
 
 ### Deployment
 - Docker Compose: yDB + PostgreSQL + Redis (secrets required, no defaults)
@@ -152,19 +152,37 @@ npm start             # http://localhost:3000
 
 ### How it works:
 1. User opens "BI Copilot" tab
-2. Selects a connected database
-3. Types a business question in natural language (BM or EN)
-4. System reads database schema for context
-5. Generates appropriate SQL query
-6. Executes against the connected database
-7. Returns results as table, chart, or single number
+2. Selects a connected database from dropdown
+3. Dynamic suggestions appear based on actual schema analysis
+4. User types a business question in plain English
+5. System reads database schema for context
+6. Generates appropriate SQL query using pattern matching or LLM
+7. Executes against the connected database via adapter
+8. Returns results as table, chart, or single number
 
 ### Supported question patterns:
-- "Berapa jumlah jualan bulan lepas?" → COUNT/SUM with date filter
-- "Top 10 pelanggan tertinggi" → ORDER BY DESC LIMIT
-- "Show monthly revenue trend" → GROUP BY month with line chart
-- "Senarai semua transaksi hari ini" → SELECT with date filter
-- "Data mengikut status" → GROUP BY with pie chart
+| Pattern | Example | Output |
+|---|---|---|
+| Count | "How many users?" | Single number |
+| Sum | "Total amount from transactions" | Single number |
+| Trend | "Monthly trend of transactions" | Bar chart |
+| Breakdown | "Breakdown of users by status" | Pie chart |
+| Top-N | "Top 10 merchants by fee" | Bar chart |
+| Bottom-N | "Bottom 5 by balance" | Bar chart |
+| Recent | "Latest 20 records" | Table |
+| Average | "Average transaction amount" | Number |
+| Max/Min | "Highest deposit amount" | Number |
+| Search | "Find user john" | Table |
+| Time filter | "Transactions this month" | Filtered |
+| Status filter | "Show pending payments" | Filtered |
+| Compare | "Compare by category" | Bar chart |
+
+### Dynamic Suggestions:
+The suggestion bar analyzes your actual database schema and generates relevant questions:
+- Tables with amount/price columns get SUM and TOP-N suggestions
+- Tables with date columns get trend and recent suggestions
+- Tables with status/type columns get breakdown suggestions
+- All tables get count suggestions
 
 ### AI Provider Configuration:
 ```env
