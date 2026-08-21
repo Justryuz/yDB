@@ -172,11 +172,11 @@ function generateSmartSuggestions(schema, dbType) {
         }
     }
 
-    // Build categories from unique types
+    // Build categories
     const catSet = new Set(questions.map(q => q.category));
     for (const cat of catSet) {
         const label = { count: 'Counts', sum: 'Totals', trend: 'Trends', breakdown: 'Breakdowns', ranking: 'Rankings', recent: 'Recent' }[cat] || cat;
-        categories.push({ id: cat, label, icon: { count: '🔢', sum: '💰', trend: '📈', breakdown: '🧩', ranking: '🏆', recent: '🕐' }[cat] || '📊' });
+        categories.push({ id: cat, label });
     }
 
     // Limit to most useful suggestions (max 20)

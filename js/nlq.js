@@ -128,14 +128,13 @@ YDB.NLQ = {
                 });
 
                 // Render category tabs + suggestion chips
-                var catIcons = { count: '🔢', sum: '💰', trend: '📈', breakdown: '🧩', ranking: '🏆', recent: '🕐' };
+                var catIcons = { count: '#', sum: '$', trend: '^', breakdown: '/', ranking: '*', recent: '~' };
 
                 html += '<div class="flex gap-1 flex-wrap">';
                 for (var cat in grouped) {
-                    var icon = catIcons[cat] || '📊';
                     grouped[cat].forEach(function (s) {
                         html += '<button class="btn btn-xs btn-outline nlq-suggest-dynamic" data-q="' + self._escAttr(s.q) + '" title="' + (s.table || '') + '">';
-                        html += icon + ' ' + self._truncate(s.q, 30);
+                        html += self._truncate(s.q, 35);
                         html += '</button>';
                     });
                 }

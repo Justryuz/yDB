@@ -2,14 +2,12 @@
  * @file services/nlq.js
  * @description Natural Language Query (NLQ) / Text-to-SQL engine.
  *
- * This is the core AI layer for the BI Copilot feature.
  * Converts natural language business questions into executable SQL queries
  * with schema awareness, intelligent table detection, JOIN inference,
  * and automatic visualization recommendations.
  *
  * Supports:
  *  - Pluggable LLM backends (Amazon Bedrock, OpenAI, built-in heuristic)
- *  - Multi-language input (English, Bahasa Malaysia)
  *  - Cross-table JOIN detection
  *  - Time-based filters (today, this week, last month, YTD, etc.)
  *  - Status/role/category filtering
@@ -27,114 +25,85 @@ const { withTunnel } = require('./ssh-tunnel');
 
 // ═══════════════════════════════════════════════════════════════════════
 // KEYWORD-TO-TABLE MAPPING
-// Maps business domain terms to likely table name patterns.
-// The engine scans the actual schema tables and matches against these.
 // ═══════════════════════════════════════════════════════════════════════
 
 const TABLE_KEYWORD_MAP = {
-    // People / Accounts
-    'user|pengguna|pelanggan|customer|client|member|ahli|subscriber|account|akaun|registration|signup':
-        /user|member|customer|client|account|pelanggan|subscriber|registration/i,
-
-    // Merchants / Business
-    'merchant|peniaga|seller|penjual|vendor|kedai|shop|store|business|supplier|partner':
-        /merchant|vendor|seller|shop|store|business|supplier|partner/i,
-
-    // Transactions / Payments
-    'transaction|transaksi|bayar|payment|jualan|sale|order|pesanan|purchase|checkout|billing|invoice|receipt':
+    'user|customer|client|member|subscriber|account|registration|signup|profile':
+        /user|member|customer|client|account|subscriber|registration|profile/i,
+    'merchant|seller|vendor|shop|store|business|supplier|partner|retailer|outlet':
+        /merchant|vendor|seller|shop|store|business|supplier|partner|retailer|outlet/i,
+    'transaction|payment|sale|order|purchase|checkout|billing|invoice|receipt':
         /transaction|payment|order|sale|purchase|invoice|billing|checkout|receipt/i,
-
-    // Products / Inventory
-    'product|produk|item|barang|catalog|inventory|stock|sku|goods|merchandise':
-        /product|item|catalog|inventory|stock|sku|goods|merchandise/i,
-
-    // Finance / Money
-    'deposit|topup|tambah|wallet|baki|balance|fund|credit|debit|payout|withdrawal|cashout|refund':
+    'product|item|catalog|inventory|stock|sku|goods|merchandise|listing':
+        /product|item|catalog|inventory|stock|sku|goods|merchandise|listing/i,
+    'deposit|topup|wallet|balance|fund|credit|debit|payout|withdrawal|cashout|refund':
         /deposit|wallet|balance|topup|fund|credit|payout|withdrawal|cashout|refund/i,
-
-    // Logs / Activity
-    'log|aktiviti|activity|history|sejarah|audit|event|tracking|session':
+    'log|activity|history|audit|event|tracking|session':
         /log|activity|history|audit|event|tracking|session/i,
-
-    // Banking
-    'bank|akaun.*bank|bank.*account|settlement|transfer|remittance':
+    'bank|settlement|transfer|remittance':
         /bank|settlement|transfer|remittance/i,
-
-    // Configuration
-    'setting|tetapan|config|preference|option|parameter':
+    'setting|config|preference|option|parameter':
         /setting|config|preference|option|parameter/i,
-
-    // Geography
-    'country|negara|state|negeri|city|bandar|region|area|zone|district|location|address':
+    'country|state|city|region|area|zone|district|location|address':
         /country|state|city|region|area|zone|district|location|address/i,
-
-    // Currency / Exchange
-    'currency|mata.*wang|exchange|rate|kadar':
-        /currency|exchange|rate/i,
-
-    // Messaging / Communication
-    'message|mesej|notification|alert|email|sms|chat|inbox|outbox':
-        /message|notification|alert|email|sms|chat|inbox|outbox/i,
-
-    // Support / Tickets
-    'ticket|tiket|support|complaint|aduan|dispute|issue|case|enquiry|feedback':
-        /ticket|support|complaint|dispute|issue|case|enquiry|feedback/i,
-
-    // Promotions / Marketing
-    'promo|promotion|coupon|voucher|discount|campaign|offer|deal|reward|loyalty|point':
-        /promo|coupon|voucher|discount|campaign|offer|deal|reward|loyalty|point/i,
-
-    // Documents / Files
-    'document|dokumen|file|attachment|upload|media|image|photo|document':
+    'currency|exchange|rate|forex':
+        /currency|exchange|rate|forex/i,
+    'message|notification|alert|email|sms|chat|inbox':
+        /message|notification|alert|email|sms|chat|inbox/i,
+    'ticket|support|complaint|dispute|issue|case|enquiry|feedback|helpdesk':
+        /ticket|support|complaint|dispute|issue|case|enquiry|feedback|helpdesk/i,
+    'promo|promotion|coupon|voucher|discount|campaign|offer|deal|reward|loyalty|point|referral':
+        /promo|coupon|voucher|discount|campaign|offer|deal|reward|loyalty|point|referral/i,
+    'cashback|rebate':
+        /cashback|rebate/i,
+    'document|file|attachment|upload|media|image|photo':
         /document|file|attachment|upload|media|image|photo/i,
-
-    // KYC / Verification
-    'kyc|verification|verify|identity|ic|passport|selfie|document.*verify':
-        /kyc|verification|verify|identity|document/i,
-
-    // Commission / Fees
-    'commission|komisen|fee|charge|caj|markup|margin|earning':
+    'kyc|verification|verify|identity':
+        /kyc|verification|verify|identity/i,
+    'commission|fee|charge|markup|margin|earning':
         /commission|fee|charge|markup|margin|earning/i,
-
-    // Reports / Analytics
-    'report|laporan|summary|ringkasan|dashboard|analytics|statistic|stat':
+    'report|summary|dashboard|analytics|statistic':
         /report|summary|dashboard|analytics|statistic/i,
-
-    // Subscription / Plans
-    'subscription|langganan|plan|package|tier|membership|license':
+    'subscription|plan|package|tier|membership|license':
         /subscription|plan|package|tier|membership|license/i,
-
-    // Crypto / Digital Assets
-    'crypto|token|coin|blockchain|nft|digital.*asset':
-        /crypto|token|coin|blockchain|nft|digital.*asset/i,
-
-    // Devices / Hardware
-    'device|peranti|terminal|pos|hardware|machine':
+    'crypto|token|coin|blockchain|nft':
+        /crypto|token|coin|blockchain|nft/i,
+    'device|terminal|pos|hardware|machine':
         /device|terminal|pos|hardware|machine/i,
-
-    // Backup / Archives
-    'backup|arkib|archive|snapshot':
-        /backup|archive|snapshot/i,
-
-    // Roles / Permissions
-    'role|peranan|permission|kebenaran|privilege|access':
+    'role|permission|privilege|access':
         /role|permission|privilege|access/i,
-
-    // Addons / Plugins / Extensions
-    'addon|plugin|extension|module|integration|api.*key':
-        /addon|plugin|extension|module|integration|api.*key/i,
+    'addon|plugin|extension|module|integration':
+        /addon|plugin|extension|module|integration/i,
+    'loan|financing|installment|repayment':
+        /loan|financing|installment|repayment/i,
+    'insurance|policy|claim|premium':
+        /insurance|policy|claim|premium/i,
+    'delivery|shipping|logistics|courier|rider|driver|pickup':
+        /delivery|shipping|logistics|courier|rider|driver|pickup/i,
+    'warehouse|storage|bin|rack':
+        /warehouse|storage|bin|rack/i,
+    'employee|staff|payroll|salary|attendance|leave':
+        /employee|staff|payroll|salary|attendance|leave/i,
+    'tax|sst|gst|vat|withholding':
+        /tax|sst|gst|vat|withholding/i,
+    'review|rating|testimonial':
+        /review|rating|testimonial/i,
+    'cart|basket|wishlist':
+        /cart|basket|wishlist/i,
+    'contract|agreement|term':
+        /contract|agreement|term/i,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// AGGREGATION KEYWORDS
+// AGGREGATION KEYWORDS (word-boundary safe to avoid "admin" matching "min")
 // ═══════════════════════════════════════════════════════════════════════
 
 const AGG_PATTERNS = {
-    count: /how many|berapa.*ramai|berapa.*banyak|count of|total.*number|jumlah.*rekod|number of|count all/i,
-    sum: /total.*amount|total.*sales|total.*revenue|total.*deposit|total.*value|sum of|jumlah.*nilai|gross|net.*total|how much.*(?:revenue|sales|deposit|money|amount|earn|spend|paid|cost)|berapa.*jumlah.*(bayar|jualan|deposit|amount|revenue)/i,
-    avg: /average|purata|avg|mean|typical/i,
-    max: /maximum|max|highest|tertinggi|paling.*tinggi|largest|biggest|most.*expensive/i,
-    min: /minimum|min|lowest|terendah|paling.*rendah|smallest|cheapest|least/i,
+    count: /\b(how many|count of|total number|number of|count all)\b/i,
+    sum: /\b(total amount|total sales|total revenue|total deposit|total value|sum of|gross|net total)\b|how much.*(revenue|sales|deposit|money|amount|earn|spend|paid|cost)/i,
+    avg: /\b(average|avg|mean|typical)\b/i,
+    max: /\b(maximum|highest|largest|biggest|most expensive)\b/i,
+    min: /\b(minimum|lowest|smallest|cheapest)\b/i,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -142,33 +111,35 @@ const AGG_PATTERNS = {
 // ═══════════════════════════════════════════════════════════════════════
 
 const TIME_PATTERNS = {
-    today: /today|hari\s*ini|this day/i,
-    yesterday: /yesterday|semalam|kelmarin/i,
-    this_week: /this\s*week|minggu\s*ini|current week/i,
-    last_week: /last\s*week|minggu\s*lepas|previous week/i,
-    this_month: /this\s*month|bulan\s*ini|current month/i,
-    last_month: /last\s*month|bulan\s*lepas|previous month/i,
-    last_3_months: /last\s*3\s*months|3\s*bulan|quarter|suku\s*tahun/i,
-    last_6_months: /last\s*6\s*months|6\s*bulan|half\s*year/i,
-    this_year: /this\s*year|tahun\s*ini|ytd|year\s*to\s*date/i,
-    last_year: /last\s*year|tahun\s*lepas|previous year/i,
-    last_7_days: /last\s*7\s*days|past\s*week|7\s*hari/i,
-    last_30_days: /last\s*30\s*days|past\s*month|30\s*hari/i,
-    last_90_days: /last\s*90\s*days|past\s*quarter|90\s*hari/i,
+    today: /\btoday\b/i,
+    yesterday: /\byesterday\b/i,
+    this_week: /\bthis\s*week\b/i,
+    last_week: /\blast\s*week\b/i,
+    this_month: /\bthis\s*month\b/i,
+    last_month: /\blast\s*month\b/i,
+    last_3_months: /\b(last\s*3\s*months|quarter)\b/i,
+    last_6_months: /\b(last\s*6\s*months|half\s*year)\b/i,
+    this_year: /\b(this\s*year|ytd|year\s*to\s*date)\b/i,
+    last_year: /\blast\s*year\b/i,
+    last_7_days: /\b(last\s*7\s*days|past\s*week)\b/i,
+    last_30_days: /\b(last\s*30\s*days|past\s*month)\b/i,
+    last_90_days: /\b(last\s*90\s*days|past\s*quarter)\b/i,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// STATUS / STATE KEYWORDS
+// STATUS KEYWORDS
 // ═══════════════════════════════════════════════════════════════════════
 
 const STATUS_KEYWORDS = {
-    active: /\b(active|aktif|enabled|live|online)\b/i,
-    inactive: /\b(inactive|tidak.*aktif|disabled|offline|dormant|suspended)\b/i,
-    pending: /\b(pending|menunggu|awaiting|in.*progress|processing|queued)\b/i,
-    approved: /\b(approved|lulus|accepted|confirmed|verified|completed|success|successful|berjaya)\b/i,
-    rejected: /\b(rejected|gagal|failed|denied|declined|cancelled|canceled|refused)\b/i,
-    expired: /\b(expired|tamat|lapsed|overdue)\b/i,
+    active: /\b(active|enabled|live|online)\b/i,
+    inactive: /\b(inactive|disabled|offline|dormant|suspended)\b/i,
+    pending: /\b(pending|awaiting|in progress|processing|queued)\b/i,
+    approved: /\b(approved|accepted|confirmed|verified|completed|success|successful)\b/i,
+    rejected: /\b(rejected|failed|denied|declined|cancelled|canceled|refused)\b/i,
+    expired: /\b(expired|lapsed|overdue)\b/i,
     blocked: /\b(blocked|banned|blacklisted|frozen|locked)\b/i,
+    paid: /\b(paid|settled)\b/i,
+    unpaid: /\b(unpaid|outstanding)\b/i,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -176,594 +147,396 @@ const STATUS_KEYWORDS = {
 // ═══════════════════════════════════════════════════════════════════════
 
 class NLQEngine {
-    constructor() {
-        this.conversations = new Map();
-    }
+    constructor() {}
 
-    /**
-     * Process a natural language question and generate SQL.
-     * @param {Object} opts
-     * @param {string} opts.question - Natural language question
-     * @param {Object} opts.schema - Database schema { tables: { name: { columns } } }
-     * @param {string} opts.dbType - Database type (postgresql, mysql, etc.)
-     * @param {number} opts.userId - User ID for conversation context
-     * @returns {Promise<{ sql: string, explanation: string, chartType: string }>}
-     */
     async generateSQL(opts) {
         const { question, schema, dbType, userId } = opts;
         const tables = Object.keys(schema.tables || {});
         const q = question.toLowerCase().trim();
 
-        // Build schema context for LLM prompt
-        const schemaContext = this._buildSchemaContext(schema);
-
-        // Try external LLM first if configured
         if (config.nlq && config.nlq.provider !== 'builtin') {
+            const schemaContext = this._buildSchemaContext(schema);
             return await this._callExternalLLM(question, schemaContext, dbType);
         }
 
-        // Built-in intelligent heuristic engine
-        return this._heuristicGenerate(q, question, schema, tables, dbType);
+        return this._heuristicGenerate(q, schema, tables, dbType);
     }
 
-    /**
-     * Call external LLM API (Amazon Bedrock, OpenAI, etc.)
-     * @private
-     */
     async _callExternalLLM(question, schemaContext, dbType) {
         const provider = config.nlq?.provider || 'builtin';
-
-        if (provider === 'bedrock') {
-            return await this._callBedrock(question, schemaContext, dbType);
-        }
-        if (provider === 'openai') {
-            return await this._callOpenAI(question, schemaContext, dbType);
-        }
-
-        // Fallback
-        return this._heuristicGenerate(question.toLowerCase(), question, {}, [], dbType);
+        if (provider === 'bedrock') return await this._callBedrock(question, schemaContext, dbType);
+        if (provider === 'openai') return await this._callOpenAI(question, schemaContext, dbType);
+        return { sql: '', explanation: 'No LLM configured', chartType: 'table' };
     }
 
-    /**
-     * Amazon Bedrock integration (Claude)
-     * @private
-     */
     async _callBedrock(question, schemaContext, dbType) {
         try {
             const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
             const client = new BedrockRuntimeClient({ region: config.nlq?.region || 'us-east-1' });
-
             const prompt = this._buildPrompt(question, schemaContext, dbType);
             const command = new InvokeModelCommand({
                 modelId: config.nlq?.model || 'anthropic.claude-3-haiku-20240307-v1:0',
-                contentType: 'application/json',
-                accept: 'application/json',
-                body: JSON.stringify({
-                    anthropic_version: 'bedrock-2023-05-31',
-                    max_tokens: 1024,
-                    messages: [{ role: 'user', content: prompt }]
-                })
+                contentType: 'application/json', accept: 'application/json',
+                body: JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
             });
-
             const response = await client.send(command);
-            const body = JSON.parse(new TextDecoder().decode(response.body));
-            return this._parseAIResponse(body.content?.[0]?.text || '');
+            return this._parseAIResponse(JSON.parse(new TextDecoder().decode(response.body)).content?.[0]?.text || '');
         } catch (err) {
             console.error('[NLQ] Bedrock error:', err.message);
-            return this._heuristicGenerate(question.toLowerCase(), question, {}, [], 'mysql');
+            return this._heuristicGenerate(question.toLowerCase(), {}, [], dbType);
         }
     }
 
-    /**
-     * OpenAI-compatible API integration
-     * @private
-     */
     async _callOpenAI(question, schemaContext, dbType) {
         try {
-            const apiKey = config.nlq?.apiKey;
-            const baseUrl = config.nlq?.baseUrl || 'https://api.openai.com/v1';
-            const model = config.nlq?.model || 'gpt-4o-mini';
-
             const prompt = this._buildPrompt(question, schemaContext, dbType);
-            const response = await fetch(`${baseUrl}/chat/completions`, {
+            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model,
-                    messages: [
-                        { role: 'system', content: 'You are a SQL expert. Generate valid SQL. Respond in JSON: {"sql":"...","explanation":"...","chartType":"table|bar|line|pie|number"}' },
-                        { role: 'user', content: prompt }
-                    ],
-                    temperature: 0.1
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` },
+                body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [
+                    { role: 'system', content: 'You are a SQL expert. Respond in JSON: {"sql":"...","explanation":"...","chartType":"table|bar|line|pie|number"}' },
+                    { role: 'user', content: prompt }
+                ], temperature: 0.1 })
             });
-
-            const data = await response.json();
-            return this._parseAIResponse(data.choices?.[0]?.message?.content || '');
+            return this._parseAIResponse((await response.json()).choices?.[0]?.message?.content || '');
         } catch (err) {
             console.error('[NLQ] OpenAI error:', err.message);
-            return this._heuristicGenerate(question.toLowerCase(), question, {}, [], 'mysql');
+            return this._heuristicGenerate(question.toLowerCase(), {}, [], dbType);
         }
     }
 
-    /**
-     * Build prompt for LLM
-     * @private
-     */
     _buildPrompt(question, schemaContext, dbType) {
-        return `You are a Text-to-SQL assistant for a ${dbType} database.
-
-DATABASE SCHEMA:
-${schemaContext}
-
-USER QUESTION: "${question}"
-
-Generate a SQL query that answers this question. Respond ONLY in this JSON format:
-{"sql": "SELECT ...", "explanation": "Brief explanation in the same language as the question", "chartType": "table|bar|line|pie|number"}
-
-Rules:
-- Use only tables and columns from the schema above
-- For aggregation questions, suggest appropriate chart type
-- If the question asks for a single number, use chartType "number"
-- If time-series data, use "line"
-- If comparing categories, use "bar" or "pie"
-- Always LIMIT results to 1000 max
-- Respond in the same language as the question`;
+        return `You are a Text-to-SQL assistant for a ${dbType} database.\n\nDATABASE SCHEMA:\n${schemaContext}\n\nUSER QUESTION: "${question}"\n\nGenerate SQL. Respond in JSON: {"sql":"SELECT ...","explanation":"...","chartType":"table|bar|line|pie|number"}\nRules: Use only schema columns. LIMIT 1000 max. Single value = "number". Time-series = "line" or "bar". Categories = "pie".`;
     }
 
-    /**
-     * Parse AI response text to structured object
-     * @private
-     */
     _parseAIResponse(text) {
         try {
-            const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            const parsed = JSON.parse(clean);
-            return { sql: parsed.sql || '', explanation: parsed.explanation || '', chartType: parsed.chartType || 'table' };
+            return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
         } catch (e) {
-            const sqlMatch = text.match(/SELECT[\s\S]*?(?:;|$)/i);
-            return { sql: sqlMatch ? sqlMatch[0].replace(/;$/, '') : '', explanation: text.substring(0, 200), chartType: 'table' };
+            const m = text.match(/SELECT[\s\S]*?(?:;|$)/i);
+            return { sql: m ? m[0].replace(/;$/, '') : '', explanation: text.substring(0, 200), chartType: 'table' };
         }
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // BUILT-IN HEURISTIC ENGINE
+    // HEURISTIC ENGINE
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * Intelligent heuristic SQL generator.
-     * Handles business questions using advanced pattern matching + schema awareness.
-     * @private
-     */
-    _heuristicGenerate(q, originalQuestion, schema, tables, dbType) {
+    _heuristicGenerate(q, schema, tables, dbType) {
         const result = { sql: '', explanation: '', chartType: 'table' };
-        const isMalay = /berapa|jumlah|senarai|tunjuk|cari|semua|bulan|tahun|hari|siapa|ramai|mengikut|papar/i.test(q);
         const isMySQL = dbType === 'mysql' || dbType === 'mariadb';
 
-        // Step 1: Identify target table
         const targetTable = this._findBestTable(q, tables, schema);
-        const cols = schema.tables?.[targetTable]?.columns || [];
-        const colNames = cols.map(c => c.name || c);
+        const cols = (schema.tables?.[targetTable]?.columns || []).map(c => c.name || c);
+        const whereClause = this._buildWhereClause(q, cols, isMySQL);
 
-        // Step 2: Detect if JOIN is needed
-        const joinInfo = this._detectJoin(q, tables, schema, targetTable);
+        // ORDER MATTERS: check specific patterns BEFORE generic ones.
+        // "breakdown" and "trend" must come before "min"/"max" to avoid
+        // words like "admin" triggering the min pattern.
 
-        // Step 3: Build WHERE conditions
-        const whereClause = this._buildWhereClause(q, colNames, cols, isMySQL);
-
-        // Step 4: Determine query intent and generate SQL
-
-        // ── COUNT queries ──
+        // -- COUNT --
         if (AGG_PATTERNS.count.test(q)) {
-            const fromClause = joinInfo ? `${targetTable} ${joinInfo.joinClause}` : targetTable;
-            result.sql = `SELECT COUNT(*) AS total FROM ${fromClause}${whereClause}`;
-            result.explanation = isMalay ? `Jumlah rekod dalam ${targetTable}` : `Total record count from ${targetTable}`;
+            result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
+            result.explanation = `Total record count from ${targetTable}`;
             result.chartType = 'number';
         }
-        // ── SUM queries ──
+        // -- SUM --
         else if (AGG_PATTERNS.sum.test(q)) {
-            // Find a table that actually has an amount/value column
-            let sumTable = targetTable;
-            let amountCol = this._findColumn(colNames, /amount|total|price|revenue|sales|nilai|value|fee|commission|balance|sum|gross|net|cost|subtotal/i);
-            
-            // If target table doesn't have amount column, search other tables
-            if (!amountCol && schema.tables) {
-                for (const [tName, tInfo] of Object.entries(schema.tables)) {
-                    const tCols = (tInfo.columns || []).map(c => c.name || c);
-                    const found = this._findColumn(tCols, /amount|total|price|revenue|sales|value|fee|commission|balance|subtotal|gross|net/i);
-                    if (found) {
-                        sumTable = tName;
-                        amountCol = found;
-                        break;
-                    }
-                }
-            }
-            
-            if (!amountCol) {
-                // Fallback to COUNT if no numeric column found
-                result.sql = `SELECT COUNT(*) AS total FROM ${sumTable}${whereClause}`;
-                result.explanation = `No amount column found — showing count from ${sumTable}`;
-                result.chartType = 'number';
+            const col = this._findAmountColumn(cols, schema, tables, targetTable);
+            if (col.found) {
+                result.sql = `SELECT SUM(${col.name}) AS total FROM ${col.table}${whereClause}`;
+                result.explanation = `Sum of ${col.name} from ${col.table}`;
             } else {
-                result.sql = `SELECT SUM(${amountCol}) AS total FROM ${sumTable}${whereClause}`;
-                result.explanation = `Sum of ${amountCol} from ${sumTable}`;
-                result.chartType = 'number';
-            }
-        }
-        // ── AVERAGE queries ──
-        else if (AGG_PATTERNS.avg.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|age|duration|fee|value|rating|score|subtotal/i);
-            if (!amountCol) {
                 result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-                result.explanation = `No numeric column found for average — showing count from ${targetTable}`;
-                result.chartType = 'number';
-            } else {
-                result.sql = `SELECT ROUND(AVG(${amountCol}), 2) AS average FROM ${targetTable}${whereClause}`;
-                result.explanation = `Average ${amountCol} from ${targetTable}`;
-                result.chartType = 'number';
+                result.explanation = `No amount column found - showing count from ${targetTable}`;
             }
+            result.chartType = 'number';
         }
-        // ── MAX queries ──
-        else if (AGG_PATTERNS.max.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating|subtotal/i);
-            if (!amountCol) {
-                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
-                result.explanation = `Latest record from ${targetTable}`;
-                result.chartType = 'table';
-            } else {
-                result.sql = `SELECT MAX(${amountCol}) AS maximum FROM ${targetTable}${whereClause}`;
-                result.explanation = `Maximum ${amountCol} from ${targetTable}`;
-                result.chartType = 'number';
-            }
+        // -- TREND / MONTHLY / TIME-SERIES --
+        else if (/\b(trend|monthly|daily|weekly|over time|growth|per day|per week|per month|per year)\b/i.test(q)) {
+            const dateCol = this._findCol(cols, /date|created|time|updated|registered|joined|timestamp/i) || 'created_at';
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|value|fee|subtotal/i);
+            const valueExpr = amtCol ? `SUM(${amtCol})` : 'COUNT(*)';
+            let fmt, alias;
+            if (/\bdaily\b|\bper day\b/i.test(q)) { fmt = isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`; alias = 'day'; }
+            else if (/\bweekly\b|\bper week\b/i.test(q)) { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`; alias = 'week'; }
+            else { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-%m')` : `TO_CHAR(${dateCol}, 'YYYY-MM')`; alias = 'month'; }
+            result.sql = `SELECT ${fmt} AS ${alias}, ${valueExpr} AS total FROM ${targetTable}${whereClause} GROUP BY ${alias} ORDER BY ${alias} DESC LIMIT 12`;
+            result.explanation = `${alias.charAt(0).toUpperCase() + alias.slice(1)}ly trend from ${targetTable}`;
+            result.chartType = /daily/i.test(q) ? 'line' : 'bar';
         }
-        // ── MIN queries ──
-        else if (AGG_PATTERNS.min.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating|subtotal/i);
-            if (!amountCol) {
-                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
-                result.explanation = `Earliest record from ${targetTable}`;
-                result.chartType = 'table';
-            } else {
-                result.sql = `SELECT MIN(${amountCol}) AS minimum FROM ${targetTable}${whereClause}`;
-                result.explanation = `Minimum ${amountCol} from ${targetTable}`;
-                result.chartType = 'number';
-            }
-        }
-        // ── TREND / MONTHLY / TIME-SERIES ──
-        else if (/trend|bulan|month|monthly|bulanan|daily|harian|weekly|mingguan|over\s*time|growth|per\s*(day|week|month|year)/i.test(q)) {
-            const dateCol = this._findColumn(colNames, /date|created|time|tarikh|registered|joined|updated|occurred|timestamp/i) || 'created_at';
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|sales|nilai|value|fee|count/i);
-            const valueExpr = amountCol ? `SUM(${amountCol})` : 'COUNT(*)';
-
-            let groupFormat, groupAlias;
-            if (/daily|harian|per\s*day/i.test(q)) {
-                groupFormat = isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`;
-                groupAlias = 'day';
-            } else if (/weekly|mingguan|per\s*week/i.test(q)) {
-                groupFormat = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`;
-                groupAlias = 'week';
-            } else {
-                groupFormat = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-%m')` : `TO_CHAR(${dateCol}, 'YYYY-MM')`;
-                groupAlias = 'month';
-            }
-
-            result.sql = `SELECT ${groupFormat} AS ${groupAlias}, ${valueExpr} AS total FROM ${targetTable}${whereClause} GROUP BY ${groupAlias} ORDER BY ${groupAlias} DESC LIMIT 12`;
-            result.explanation = isMalay ? `Trend mengikut ${groupAlias} dari ${targetTable}` : `${groupAlias.charAt(0).toUpperCase() + groupAlias.slice(1)}ly trend from ${targetTable}`;
-            result.chartType = /daily|harian/i.test(q) ? 'line' : 'bar';
-        }
-        // ── TOP-N queries ──
-        else if (/top|teratas|tertinggi|highest|best|paling.*tinggi|paling.*banyak|most|leading|biggest/i.test(q)) {
-            const limitMatch = q.match(/\d+/);
-            const limit = limitMatch ? Math.min(parseInt(limitMatch[0]), 100) : 10;
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|count|sales|balance|fee|value|score|rating|commission/i) || colNames[colNames.length - 1] || 'id';
-            const nameCol = this._findColumn(colNames, /name|nama|title|label|username|email|phone|description|company/i) || colNames[0] || 'id';
-
-            const fromClause = joinInfo ? `${targetTable} ${joinInfo.joinClause}` : targetTable;
-            const selectCols = joinInfo ? `${targetTable}.${nameCol}, ${targetTable}.${amountCol}` : `${nameCol}, ${amountCol}`;
-            result.sql = `SELECT ${selectCols} FROM ${fromClause}${whereClause} ORDER BY ${targetTable}.${amountCol} DESC LIMIT ${limit}`;
-            result.explanation = isMalay ? `Top ${limit} mengikut ${amountCol} dari ${targetTable}` : `Top ${limit} by ${amountCol} from ${targetTable}`;
-            result.chartType = 'bar';
-        }
-        // ── BOTTOM-N queries ──
-        else if (/bottom|lowest|terendah|worst|least|fewest/i.test(q)) {
-            const limitMatch = q.match(/\d+/);
-            const limit = limitMatch ? Math.min(parseInt(limitMatch[0]), 100) : 10;
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|count|sales|balance|fee|value/i) || colNames[colNames.length - 1] || 'id';
-            const nameCol = this._findColumn(colNames, /name|nama|title|label|username|email/i) || colNames[0] || 'id';
-            result.sql = `SELECT ${nameCol}, ${amountCol} FROM ${targetTable}${whereClause} ORDER BY ${amountCol} ASC LIMIT ${limit}`;
-            result.explanation = isMalay ? `${limit} terendah mengikut ${amountCol}` : `Bottom ${limit} by ${amountCol} from ${targetTable}`;
-            result.chartType = 'bar';
-        }
-        // ── GROUP BY / BREAKDOWN / DISTRIBUTION ──
-        else if (/group|kumpul|mengikut|breakdown|by\s*(status|type|category|role)|distribution|pecahan|segmen|segment|classify|ratio|proportion/i.test(q)) {
-            const groupCol = this._detectGroupColumn(q, colNames) || this._findColumn(colNames, /status|type|category|jenis|role|level|tier|group|class|segment/i) || colNames[1] || 'status';
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|value|fee/i);
-            const aggExpr = amountCol ? `SUM(${amountCol})` : 'COUNT(*)';
-            result.sql = `SELECT ${groupCol}, ${aggExpr} AS total FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY total DESC LIMIT 20`;
-            result.explanation = isMalay ? `Pecahan mengikut ${groupCol} dari ${targetTable}` : `Breakdown by ${groupCol} from ${targetTable}`;
+        // -- BREAKDOWN / GROUP BY --
+        else if (/\b(breakdown|group by|by status|by type|by category|by role|distribution|segment)\b/i.test(q)) {
+            const groupCol = this._detectGroupCol(q, cols) || this._findCol(cols, /^status$|^type$|^category$|^role$|^level$|^tier$/i) || cols[1] || 'id';
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|value|fee|subtotal/i);
+            const agg = amtCol ? `SUM(${amtCol})` : 'COUNT(*)';
+            result.sql = `SELECT ${groupCol}, ${agg} AS total FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY total DESC LIMIT 20`;
+            result.explanation = `Breakdown by ${groupCol} from ${targetTable}`;
             result.chartType = 'pie';
         }
-        // ── WHO / SIAPA queries ──
-        else if (/who|siapa|which\s*(user|merchant|customer|admin|person)/i.test(q)) {
-            const typeCol = this._findColumn(colNames, /role|type|status|jenis|level|position|title/i);
-            let filter = whereClause;
-            if (!filter && typeCol) {
-                const roleMatch = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|user|manager|staff|operator|superadmin)\b/i);
-                if (roleMatch) filter = ` WHERE ${typeCol} = '${roleMatch[1]}'`;
-            }
-            result.sql = `SELECT * FROM ${targetTable}${filter} ORDER BY id DESC LIMIT 25`;
-            result.explanation = isMalay ? `Senarai dari ${targetTable}${filter ? ' (ditapis)' : ''}` : `Records from ${targetTable}${filter ? ' (filtered)' : ''}`;
-            result.chartType = 'table';
-        }
-        // ── RECENT / LATEST queries ──
-        else if (/recent|terkini|latest|newest|baru|last|terbaru|just\s*now|newly/i.test(q)) {
-            const dateCol = this._findColumn(colNames, /date|created|time|updated|registered|joined|occurred|timestamp/i) || 'created_at';
-            const limitMatch = q.match(/\d+/);
-            const limit = limitMatch ? Math.min(parseInt(limitMatch[0]), 100) : 20;
-            result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY ${dateCol} DESC LIMIT ${limit}`;
-            result.explanation = isMalay ? `${limit} rekod terkini dari ${targetTable}` : `${limit} most recent records from ${targetTable}`;
-            result.chartType = 'table';
-        }
-        // ── SEARCH / FIND specific value ──
-        else if (/find|cari|search|look.*for|where.*is|locate/i.test(q)) {
-            const searchTerm = q.replace(/find|cari|search|look\s*for|where\s*is|locate/gi, '').trim();
-            const searchCol = this._findColumn(colNames, /name|nama|title|email|phone|username|description|label/i) || colNames[0];
-            result.sql = `SELECT * FROM ${targetTable} WHERE ${searchCol} LIKE '%${searchTerm.replace(/'/g, "''")}%' LIMIT 25`;
-            result.explanation = isMalay ? `Carian "${searchTerm}" dalam ${targetTable}` : `Search "${searchTerm}" in ${targetTable}`;
-            result.chartType = 'table';
-        }
-        // ── LIST / SHOW queries ──
-        else if (/senarai|list|show|tunjuk|papar|display|all|semua|view/i.test(q)) {
-            const limitMatch = q.match(/\d+/);
-            const limit = limitMatch ? Math.min(parseInt(limitMatch[0]), 100) : 50;
-            result.sql = `SELECT * FROM ${targetTable}${whereClause} LIMIT ${limit}`;
-            result.explanation = isMalay ? `Senarai data dari ${targetTable}` : `Listing records from ${targetTable}`;
-            result.chartType = 'table';
-        }
-        // ── COMPARE / VERSUS ──
-        else if (/compare|banding|versus|vs|difference|between/i.test(q)) {
-            const groupCol = this._findColumn(colNames, /status|type|category|role|level|tier|group/i) || colNames[1];
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|value|count/i);
-            const aggExpr = amountCol ? `SUM(${amountCol})` : 'COUNT(*)';
-            result.sql = `SELECT ${groupCol}, ${aggExpr} AS total, COUNT(*) AS count FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY total DESC`;
-            result.explanation = isMalay ? `Perbandingan mengikut ${groupCol}` : `Comparison by ${groupCol} from ${targetTable}`;
+        // -- TOP-N --
+        else if (/\b(top|best|leading|biggest|most)\b/i.test(q)) {
+            const n = Math.min(parseInt((q.match(/\d+/) || ['10'])[0]), 100);
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|balance|fee|value|score|subtotal|commission/i) || cols[cols.length - 1] || 'id';
+            const nameCol = this._findCol(cols, /name|title|label|username|email|phone|company|item_name/i) || cols[0] || 'id';
+            result.sql = `SELECT ${nameCol}, ${amtCol} FROM ${targetTable}${whereClause} ORDER BY ${amtCol} DESC LIMIT ${n}`;
+            result.explanation = `Top ${n} by ${amtCol} from ${targetTable}`;
             result.chartType = 'bar';
         }
-        // ── GENERIC "berapa" (how much/many) ──
-        else if (/^berapa|how\s*much|how\s*many/i.test(q)) {
-            result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-            result.explanation = isMalay ? `Jumlah rekod dalam ${targetTable}` : `Count from ${targetTable}`;
+        // -- BOTTOM-N --
+        else if (/\b(bottom|worst|least|fewest|lowest)\b/i.test(q)) {
+            const n = Math.min(parseInt((q.match(/\d+/) || ['10'])[0]), 100);
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|balance|fee|value/i) || cols[cols.length - 1] || 'id';
+            const nameCol = this._findCol(cols, /name|title|label|username|email/i) || cols[0] || 'id';
+            result.sql = `SELECT ${nameCol}, ${amtCol} FROM ${targetTable}${whereClause} ORDER BY ${amtCol} ASC LIMIT ${n}`;
+            result.explanation = `Bottom ${n} by ${amtCol} from ${targetTable}`;
+            result.chartType = 'bar';
+        }
+        // -- AVERAGE --
+        else if (AGG_PATTERNS.avg.test(q)) {
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|rating|score|subtotal/i);
+            if (amtCol) {
+                result.sql = `SELECT ROUND(AVG(${amtCol}), 2) AS average FROM ${targetTable}${whereClause}`;
+                result.explanation = `Average ${amtCol} from ${targetTable}`;
+            } else {
+                result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
+                result.explanation = `No numeric column for average - showing count from ${targetTable}`;
+            }
             result.chartType = 'number';
         }
-        // ── DEFAULT: show sample data ──
+        // -- MAX --
+        else if (AGG_PATTERNS.max.test(q)) {
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|balance|score|subtotal/i);
+            if (amtCol) {
+                result.sql = `SELECT MAX(${amtCol}) AS maximum FROM ${targetTable}${whereClause}`;
+                result.explanation = `Maximum ${amtCol} from ${targetTable}`;
+                result.chartType = 'number';
+            } else {
+                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
+                result.explanation = `Latest record from ${targetTable}`;
+            }
+        }
+        // -- MIN --
+        else if (AGG_PATTERNS.min.test(q)) {
+            const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|balance|score|subtotal/i);
+            if (amtCol) {
+                result.sql = `SELECT MIN(${amtCol}) AS minimum FROM ${targetTable}${whereClause}`;
+                result.explanation = `Minimum ${amtCol} from ${targetTable}`;
+                result.chartType = 'number';
+            } else {
+                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
+                result.explanation = `Earliest record from ${targetTable}`;
+            }
+        }
+        // -- WHO / WHICH --
+        else if (/\b(who|which user|which merchant|which customer)\b/i.test(q)) {
+            const typeCol = this._findCol(cols, /^type$|^role$|^status$/i);
+            let filter = whereClause;
+            if (!filter && typeCol) {
+                const m = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|manager|staff|operator)\b/i);
+                if (m) filter = ` WHERE ${typeCol} = '${m[1]}'`;
+            }
+            result.sql = `SELECT * FROM ${targetTable}${filter} ORDER BY id DESC LIMIT 25`;
+            result.explanation = `Records from ${targetTable}${filter ? ' (filtered)' : ''}`;
+        }
+        // -- RECENT / LATEST --
+        else if (/\b(recent|latest|newest|last)\b/i.test(q) && !/\blast\s*(week|month|year|quarter|\d)/i.test(q)) {
+            const dateCol = this._findCol(cols, /date|created|time|updated|registered|timestamp/i) || 'created_at';
+            const n = Math.min(parseInt((q.match(/\d+/) || ['20'])[0]), 100);
+            result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY ${dateCol} DESC LIMIT ${n}`;
+            result.explanation = `${n} most recent records from ${targetTable}`;
+        }
+        // -- SEARCH / FIND --
+        else if (/\b(find|search|look for|locate)\b/i.test(q)) {
+            const term = q.replace(/\b(find|search|look\s*for|locate)\b/gi, '').trim();
+            const searchCol = this._findCol(cols, /name|title|email|phone|username|description|label/i) || cols[0];
+            result.sql = `SELECT * FROM ${targetTable} WHERE ${searchCol} LIKE '%${term.replace(/'/g, "''")}%' LIMIT 25`;
+            result.explanation = `Search "${term}" in ${targetTable}`;
+        }
+        // -- LIST / SHOW --
+        else if (/\b(list|show|display|all|view)\b/i.test(q)) {
+            const n = Math.min(parseInt((q.match(/\d+/) || ['50'])[0]), 100);
+            result.sql = `SELECT * FROM ${targetTable}${whereClause} LIMIT ${n}`;
+            result.explanation = `Listing records from ${targetTable}`;
+        }
+        // -- COMPARE --
+        else if (/\b(compare|versus|vs|difference)\b/i.test(q)) {
+            const groupCol = this._findCol(cols, /^status$|^type$|^category$|^role$/i) || cols[1];
+            result.sql = `SELECT ${groupCol}, COUNT(*) AS count FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY count DESC`;
+            result.explanation = `Comparison by ${groupCol} from ${targetTable}`;
+            result.chartType = 'bar';
+        }
+        // -- GENERIC "how much" / "how many" fallback --
+        else if (/\bhow (much|many)\b/i.test(q)) {
+            result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
+            result.explanation = `Count from ${targetTable}`;
+            result.chartType = 'number';
+        }
+        // -- DEFAULT --
         else {
             result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY 1 DESC LIMIT 25`;
-            result.explanation = isMalay ? `Data dari ${targetTable}` : `Data from ${targetTable}`;
-            result.chartType = 'table';
+            result.explanation = `Data from ${targetTable}`;
         }
 
         return result;
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // HELPER METHODS
+    // HELPERS
     // ═══════════════════════════════════════════════════════════════════
 
-    /**
-     * Find the best matching table from user's question.
-     * Uses keyword mapping + fuzzy matching against actual schema tables.
-     * @private
-     */
     _findBestTable(q, tables, schema) {
         if (!tables.length) return 'data';
-        const qLower = q.toLowerCase();
 
-        // 1. Direct exact/partial table name match
+        // Direct name match (exact, singular, plural, underscore-to-space)
         for (const t of tables) {
-            const tLower = t.toLowerCase();
-            const tReadable = t.replace(/_/g, ' ').toLowerCase();
-            const tSingular = tLower.replace(/s$/, '');
-            const tPlural = tLower + 's';
-
-            if (qLower.includes(tLower) || qLower.includes(tReadable) ||
-                qLower.includes(tSingular) || qLower.includes(tPlural)) {
-                return t;
-            }
+            const tl = t.toLowerCase();
+            const readable = t.replace(/_/g, ' ').toLowerCase();
+            const singular = tl.replace(/s$/, '');
+            if (q.includes(tl) || q.includes(readable) || q.includes(singular)) return t;
         }
 
-        // 2. Keyword-to-table pattern matching
-        for (const [keywords, tablePattern] of Object.entries(TABLE_KEYWORD_MAP)) {
-            const keyRegex = new RegExp(`\\b(${keywords})\\b`, 'i');
-            if (keyRegex.test(qLower)) {
-                const match = tables.find(t => tablePattern.test(t));
+        // Keyword map
+        for (const [keywords, pattern] of Object.entries(TABLE_KEYWORD_MAP)) {
+            if (new RegExp(`\\b(${keywords})\\b`, 'i').test(q)) {
+                const match = tables.find(t => pattern.test(t));
                 if (match) return match;
             }
         }
 
-        // 3. Partial substring match (last resort)
-        const words = qLower.split(/\s+/).filter(w => w.length > 3);
-        for (const word of words) {
-            const match = tables.find(t => t.toLowerCase().includes(word) || word.includes(t.toLowerCase().replace(/s$/, '')));
-            if (match) return match;
+        // Partial word match
+        const words = q.split(/\s+/).filter(w => w.length > 3);
+        for (const w of words) {
+            const m = tables.find(t => t.toLowerCase().includes(w) || w.includes(t.toLowerCase().replace(/s$/, '')));
+            if (m) return m;
         }
 
-        // 4. Default to first table
         return tables[0];
     }
 
-    /**
-     * Detect if a JOIN is needed between tables.
-     * Looks for FK relationships (user_id, merchant_id, etc.)
-     * @private
-     */
-    _detectJoin(q, tables, schema, primaryTable) {
-        const qLower = q.toLowerCase();
+    _findCol(cols, pattern) {
+        return cols.find(c => pattern.test(c)) || null;
+    }
 
-        // Check if question mentions another table
-        for (const t of tables) {
-            if (t === primaryTable) continue;
-            const tSingular = t.replace(/s$/, '').toLowerCase();
+    _findAmountColumn(cols, schema, tables, targetTable) {
+        const col = this._findCol(cols, /amount|total|price|revenue|sales|value|fee|commission|balance|subtotal|gross|net|cost/i);
+        if (col) return { found: true, name: col, table: targetTable };
 
-            if (qLower.includes(t.toLowerCase()) || qLower.includes(tSingular)) {
-                // Find FK relationship
-                const primaryCols = (schema.tables?.[primaryTable]?.columns || []).map(c => c.name || c);
-                const fkCol = primaryCols.find(c => c.toLowerCase().includes(tSingular + '_id') || c.toLowerCase() === tSingular + '_id');
-
-                if (fkCol) {
-                    return {
-                        joinTable: t,
-                        joinClause: `LEFT JOIN ${t} ON ${primaryTable}.${fkCol} = ${t}.id`
-                    };
-                }
-
-                // Check reverse FK
-                const secondaryCols = (schema.tables?.[t]?.columns || []).map(c => c.name || c);
-                const reverseFk = secondaryCols.find(c => c.toLowerCase().includes(primaryTable.replace(/s$/, '') + '_id'));
-                if (reverseFk) {
-                    return {
-                        joinTable: t,
-                        joinClause: `LEFT JOIN ${t} ON ${primaryTable}.id = ${t}.${reverseFk}`
-                    };
-                }
+        // Search other tables
+        if (schema.tables) {
+            for (const [tName, tInfo] of Object.entries(schema.tables)) {
+                const tCols = (tInfo.columns || []).map(c => c.name || c);
+                const found = this._findCol(tCols, /amount|total|price|revenue|sales|value|fee|commission|balance|subtotal|gross|net/i);
+                if (found) return { found: true, name: found, table: tName };
             }
         }
+        return { found: false, name: null, table: targetTable };
+    }
 
+    _detectJoin(q, tables, schema, primaryTable) {
+        for (const t of tables) {
+            if (t === primaryTable) continue;
+            const singular = t.replace(/s$/, '').toLowerCase();
+            if (q.includes(t.toLowerCase()) || q.includes(singular)) {
+                const primaryCols = (schema.tables?.[primaryTable]?.columns || []).map(c => c.name || c);
+                const fk = primaryCols.find(c => c.toLowerCase() === singular + '_id');
+                if (fk) return { joinTable: t, joinClause: `LEFT JOIN ${t} ON ${primaryTable}.${fk} = ${t}.id` };
+            }
+        }
         return null;
     }
 
-    /**
-     * Build WHERE clause from natural language conditions.
-     * Only adds conditions for columns that actually exist in the table.
-     * @private
-     */
-    _buildWhereClause(q, colNames, cols, isMySQL) {
+    _buildWhereClause(q, cols, isMySQL) {
         const conditions = [];
 
-        // Time filters — only if date column exists
-        const dateCol = this._findColumn(colNames, /date|created|time|updated|registered|joined|occurred|timestamp/i);
+        // Time filters
+        const dateCol = this._findCol(cols, /date|created|time|updated|registered|joined|timestamp/i);
         if (dateCol) {
             for (const [period, pattern] of Object.entries(TIME_PATTERNS)) {
                 if (pattern.test(q)) {
-                    conditions.push(this._getTimeCondition(dateCol, period, isMySQL));
+                    conditions.push(this._timeCond(dateCol, period, isMySQL));
                     break;
                 }
             }
         }
 
-        // Status filters — only if status column exists
-        const statusCol = this._findColumn(colNames, /status|state|is_active|enabled/i);
+        // Status filters
+        const statusCol = this._findCol(cols, /^status$|^state$|^is_active$/i);
         if (statusCol) {
             for (const [status, pattern] of Object.entries(STATUS_KEYWORDS)) {
                 if (pattern.test(q)) {
-                    if (statusCol.includes('is_') || statusCol === 'active') {
-                        conditions.push(`${statusCol} = ${status === 'active' ? '1' : '0'}`);
-                    } else {
-                        conditions.push(`${statusCol} = '${status}'`);
-                    }
+                    conditions.push(`${statusCol} = '${status}'`);
                     break;
                 }
             }
         }
 
-        // Role/type filter — only if type/role column exists AND isn't same as statusCol
-        const typeCol = this._findColumn(colNames, /^type$|^role$|^jenis$|^level$|^position$|^tier$|^category$/i);
+        // Role/type filter
+        const typeCol = this._findCol(cols, /^type$|^role$|^category$/i);
         if (typeCol && typeCol !== statusCol) {
-            const roleMatch = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|user|manager|staff|operator|superadmin|premium|free|basic|pro|enterprise)\b/i);
-            if (roleMatch) conditions.push(`${typeCol} = '${roleMatch[1]}'`);
+            const m = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|manager|staff|operator|premium|free|basic|pro)\b/i);
+            if (m) conditions.push(`${typeCol} = '${m[1]}'`);
         }
 
-        if (conditions.length === 0) return '';
-        return ' WHERE ' + conditions.join(' AND ');
+        return conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
     }
 
-    /**
-     * Generate SQL time condition for a given period.
-     * @private
-     */
-    _getTimeCondition(dateCol, period, isMySQL) {
-        if (isMySQL) {
-            switch (period) {
-                case 'today': return `DATE(${dateCol}) = CURDATE()`;
-                case 'yesterday': return `DATE(${dateCol}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`;
-                case 'this_week': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`;
-                case 'last_week': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE()) + 7) DAY) AND ${dateCol} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`;
-                case 'this_month': return `${dateCol} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`;
-                case 'last_month': return `${dateCol} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${dateCol} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`;
-                case 'last_3_months': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`;
-                case 'last_6_months': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)`;
-                case 'this_year': return `YEAR(${dateCol}) = YEAR(CURDATE())`;
-                case 'last_year': return `YEAR(${dateCol}) = YEAR(CURDATE()) - 1`;
-                case 'last_7_days': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`;
-                case 'last_30_days': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`;
-                case 'last_90_days': return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)`;
-                default: return `${dateCol} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`;
-            }
-        } else {
-            // PostgreSQL syntax
-            switch (period) {
-                case 'today': return `DATE(${dateCol}) = CURRENT_DATE`;
-                case 'yesterday': return `DATE(${dateCol}) = CURRENT_DATE - 1`;
-                case 'this_week': return `${dateCol} >= DATE_TRUNC('week', CURRENT_DATE)`;
-                case 'last_week': return `${dateCol} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${dateCol} < DATE_TRUNC('week', CURRENT_DATE)`;
-                case 'this_month': return `${dateCol} >= DATE_TRUNC('month', CURRENT_DATE)`;
-                case 'last_month': return `${dateCol} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND ${dateCol} < DATE_TRUNC('month', CURRENT_DATE)`;
-                case 'last_3_months': return `${dateCol} >= CURRENT_DATE - INTERVAL '3 months'`;
-                case 'last_6_months': return `${dateCol} >= CURRENT_DATE - INTERVAL '6 months'`;
-                case 'this_year': return `EXTRACT(YEAR FROM ${dateCol}) = EXTRACT(YEAR FROM CURRENT_DATE)`;
-                case 'last_year': return `EXTRACT(YEAR FROM ${dateCol}) = EXTRACT(YEAR FROM CURRENT_DATE) - 1`;
-                case 'last_7_days': return `${dateCol} >= CURRENT_DATE - INTERVAL '7 days'`;
-                case 'last_30_days': return `${dateCol} >= CURRENT_DATE - INTERVAL '30 days'`;
-                case 'last_90_days': return `${dateCol} >= CURRENT_DATE - INTERVAL '90 days'`;
-                default: return `${dateCol} >= CURRENT_DATE - INTERVAL '30 days'`;
-            }
+    _timeCond(col, period, mysql) {
+        if (mysql) {
+            const map = {
+                today: `DATE(${col}) = CURDATE()`,
+                yesterday: `DATE(${col}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`,
+                this_week: `${col} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`,
+                last_week: `${col} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE())+7) DAY) AND ${col} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`,
+                this_month: `${col} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+                last_month: `${col} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${col} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`,
+                last_3_months: `${col} >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`,
+                last_6_months: `${col} >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)`,
+                this_year: `YEAR(${col}) = YEAR(CURDATE())`,
+                last_year: `YEAR(${col}) = YEAR(CURDATE()) - 1`,
+                last_7_days: `${col} >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`,
+                last_30_days: `${col} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`,
+                last_90_days: `${col} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)`,
+            };
+            return map[period] || `${col} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`;
         }
+        const map = {
+            today: `DATE(${col}) = CURRENT_DATE`,
+            yesterday: `DATE(${col}) = CURRENT_DATE - 1`,
+            this_week: `${col} >= DATE_TRUNC('week', CURRENT_DATE)`,
+            last_week: `${col} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${col} < DATE_TRUNC('week', CURRENT_DATE)`,
+            this_month: `${col} >= DATE_TRUNC('month', CURRENT_DATE)`,
+            last_month: `${col} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND ${col} < DATE_TRUNC('month', CURRENT_DATE)`,
+            last_3_months: `${col} >= CURRENT_DATE - INTERVAL '3 months'`,
+            last_6_months: `${col} >= CURRENT_DATE - INTERVAL '6 months'`,
+            this_year: `EXTRACT(YEAR FROM ${col}) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+            last_year: `EXTRACT(YEAR FROM ${col}) = EXTRACT(YEAR FROM CURRENT_DATE) - 1`,
+            last_7_days: `${col} >= CURRENT_DATE - INTERVAL '7 days'`,
+            last_30_days: `${col} >= CURRENT_DATE - INTERVAL '30 days'`,
+            last_90_days: `${col} >= CURRENT_DATE - INTERVAL '90 days'`,
+        };
+        return map[period] || `${col} >= CURRENT_DATE - INTERVAL '30 days'`;
     }
 
-    /**
-     * Detect which column to GROUP BY based on question context.
-     * @private
-     */
-    _detectGroupColumn(q, colNames) {
-        // Look for "by X" or "mengikut X" pattern
-        const byMatch = q.match(/(?:by|mengikut|ikut|per)\s+(\w+)/i);
-        if (byMatch) {
-            const wanted = byMatch[1].toLowerCase();
-            const match = colNames.find(c => c.toLowerCase().includes(wanted));
-            if (match) return match;
-        }
+    _detectGroupCol(q, cols) {
+        const m = q.match(/\bby\s+(\w+)/i);
+        if (m) { const found = cols.find(c => c.toLowerCase().includes(m[1].toLowerCase())); if (found) return found; }
         return null;
     }
 
-    /**
-     * Find a column matching a regex pattern.
-     * @private
-     */
-    _findColumn(colNames, pattern) {
-        return colNames.find(c => pattern.test(c)) || null;
-    }
-
-    /**
-     * Build schema context string for LLM prompt.
-     * @private
-     */
     _buildSchemaContext(schema) {
-        if (!schema || !schema.tables) return 'No schema available';
+        if (!schema?.tables) return 'No schema';
         let ctx = '';
-        for (const [tableName, tableInfo] of Object.entries(schema.tables)) {
-            const cols = (tableInfo.columns || []).map(c => {
-                const name = c.name || c;
-                const type = c.type || '';
-                const key = c.key ? ` [${c.key}]` : '';
-                return `  - ${name} ${type}${key}`;
-            }).join('\n');
-            ctx += `TABLE: ${tableName}\n${cols}\n\n`;
+        for (const [t, info] of Object.entries(schema.tables)) {
+            const c = (info.columns || []).map(col => `  - ${col.name || col} ${col.type || ''}`).join('\n');
+            ctx += `TABLE: ${t}\n${c}\n\n`;
         }
         return ctx;
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// PIPELINE: Question → Schema → SQL → Execute → Results
+// PIPELINE
 // ═══════════════════════════════════════════════════════════════════════
 
 function decrypt(text) {
@@ -771,87 +544,40 @@ function decrypt(text) {
     const [ivHex, encrypted] = text.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+    return decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
 }
 
-/**
- * Full NLQ pipeline: question → schema → SQL → execute → results
- */
 async function processQuestion(userId, connectionId, question) {
-    // 1. Get connection info
-    const connResult = await db.query(
-        'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
-        [connectionId, userId]
-    );
+    const connResult = await db.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, userId]);
     if (!connResult.rows.length) throw new Error('Connection not found');
 
     const conn = connResult.rows[0];
     let password = '';
-    try {
-        password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
-    } catch (e) {
-        throw new Error('Failed to decrypt connection credentials');
-    }
+    try { password = conn.password_encrypted ? decrypt(conn.password_encrypted) : ''; } catch (e) { throw new Error('Failed to decrypt credentials'); }
 
-    const options = conn.options || {};
-
-    // 2. Get schema for context
     const { opts, cleanup } = await withTunnel(
         { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
-        options.ssh
+        (conn.options || {}).ssh
     );
 
     let schema, adapter;
     try {
         adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
         schema = await adapter.getSchema();
-    } catch (err) {
-        cleanup();
-        throw new Error('Failed to get database schema: ' + err.message);
-    }
+    } catch (err) { cleanup(); throw new Error('Failed to get schema: ' + err.message); }
 
-    // 3. Generate SQL
     const engine = new NLQEngine();
     const generated = await engine.generateSQL({ question, schema, dbType: conn.db_type, userId });
+    if (!generated.sql) { cleanup(); throw new Error('Could not generate SQL. Try rephrasing.'); }
 
-    if (!generated.sql) {
-        cleanup();
-        throw new Error('Could not generate SQL from your question. Try rephrasing.');
-    }
-
-    // 4. Execute
     let results;
-    try {
-        results = await adapter.query(generated.sql);
-    } catch (queryErr) {
+    try { results = await adapter.query(generated.sql); } catch (err) {
         cleanup();
-        return {
-            success: false,
-            question,
-            sql: generated.sql,
-            explanation: generated.explanation,
-            chartType: generated.chartType,
-            error: queryErr.message,
-            data: null
-        };
+        return { success: false, question, sql: generated.sql, explanation: generated.explanation, chartType: generated.chartType, error: err.message, data: null };
     }
-
     cleanup();
 
-    // 5. Return structured response
-    return {
-        success: true,
-        question,
-        sql: generated.sql,
-        explanation: generated.explanation,
-        chartType: generated.chartType,
-        columns: results.columns,
-        data: results.data,
-        rowCount: results.data?.length || 0,
-        duration: results.duration
-    };
+    return { success: true, question, sql: generated.sql, explanation: generated.explanation, chartType: generated.chartType, columns: results.columns, data: results.data, rowCount: results.data?.length || 0, duration: results.duration };
 }
 
 module.exports = { NLQEngine, processQuestion };
