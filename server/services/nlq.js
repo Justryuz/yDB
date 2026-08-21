@@ -130,8 +130,8 @@ const TABLE_KEYWORD_MAP = {
 // ═══════════════════════════════════════════════════════════════════════
 
 const AGG_PATTERNS = {
-    count: /how many|berapa.*ramai|berapa.*banyak|count|total.*number|jumlah.*rekod|number of/i,
-    sum: /total.*amount|sum|jumlah.*nilai|total.*value|total.*sales|total.*revenue|gross|net.*total|berapa.*jumlah.*(bayar|jualan|deposit|amount|revenue)/i,
+    count: /how many|berapa.*ramai|berapa.*banyak|count of|total.*number|jumlah.*rekod|number of|count all/i,
+    sum: /total.*amount|total.*sales|total.*revenue|total.*deposit|total.*value|sum of|jumlah.*nilai|gross|net.*total|how much.*(?:revenue|sales|deposit|money|amount|earn|spend|paid|cost)|berapa.*jumlah.*(bayar|jualan|deposit|amount|revenue)/i,
     avg: /average|purata|avg|mean|typical/i,
     max: /maximum|max|highest|tertinggi|paling.*tinggi|largest|biggest|most.*expensive/i,
     min: /minimum|min|lowest|terendah|paling.*rendah|smallest|cheapest|least/i,
@@ -362,32 +362,72 @@ Rules:
         }
         // ── SUM queries ──
         else if (AGG_PATTERNS.sum.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|sales|nilai|value|fee|commission|balance|sum|gross|net|cost/i) || 'amount';
-            const fromClause = joinInfo ? `${targetTable} ${joinInfo.joinClause}` : targetTable;
-            result.sql = `SELECT SUM(${targetTable}.${amountCol}) AS total FROM ${fromClause}${whereClause}`;
-            result.explanation = isMalay ? `Jumlah ${amountCol} dari ${targetTable}` : `Sum of ${amountCol} from ${targetTable}`;
-            result.chartType = 'number';
+            // Find a table that actually has an amount/value column
+            let sumTable = targetTable;
+            let amountCol = this._findColumn(colNames, /amount|total|price|revenue|sales|nilai|value|fee|commission|balance|sum|gross|net|cost|subtotal/i);
+            
+            // If target table doesn't have amount column, search other tables
+            if (!amountCol && schema.tables) {
+                for (const [tName, tInfo] of Object.entries(schema.tables)) {
+                    const tCols = (tInfo.columns || []).map(c => c.name || c);
+                    const found = this._findColumn(tCols, /amount|total|price|revenue|sales|value|fee|commission|balance|subtotal|gross|net/i);
+                    if (found) {
+                        sumTable = tName;
+                        amountCol = found;
+                        break;
+                    }
+                }
+            }
+            
+            if (!amountCol) {
+                // Fallback to COUNT if no numeric column found
+                result.sql = `SELECT COUNT(*) AS total FROM ${sumTable}${whereClause}`;
+                result.explanation = `No amount column found — showing count from ${sumTable}`;
+                result.chartType = 'number';
+            } else {
+                result.sql = `SELECT SUM(${amountCol}) AS total FROM ${sumTable}${whereClause}`;
+                result.explanation = `Sum of ${amountCol} from ${sumTable}`;
+                result.chartType = 'number';
+            }
         }
         // ── AVERAGE queries ──
         else if (AGG_PATTERNS.avg.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|age|duration|fee|value|rating|score/i) || colNames[1] || 'id';
-            result.sql = `SELECT ROUND(AVG(${amountCol}), 2) AS average FROM ${targetTable}${whereClause}`;
-            result.explanation = isMalay ? `Purata ${amountCol} dari ${targetTable}` : `Average ${amountCol} from ${targetTable}`;
-            result.chartType = 'number';
+            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|age|duration|fee|value|rating|score|subtotal/i);
+            if (!amountCol) {
+                result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
+                result.explanation = `No numeric column found for average — showing count from ${targetTable}`;
+                result.chartType = 'number';
+            } else {
+                result.sql = `SELECT ROUND(AVG(${amountCol}), 2) AS average FROM ${targetTable}${whereClause}`;
+                result.explanation = `Average ${amountCol} from ${targetTable}`;
+                result.chartType = 'number';
+            }
         }
         // ── MAX queries ──
         else if (AGG_PATTERNS.max.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating/i) || colNames[colNames.length - 1];
-            result.sql = `SELECT MAX(${amountCol}) AS maximum FROM ${targetTable}${whereClause}`;
-            result.explanation = isMalay ? `Nilai tertinggi ${amountCol} dari ${targetTable}` : `Maximum ${amountCol} from ${targetTable}`;
-            result.chartType = 'number';
+            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating|subtotal/i);
+            if (!amountCol) {
+                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
+                result.explanation = `Latest record from ${targetTable}`;
+                result.chartType = 'table';
+            } else {
+                result.sql = `SELECT MAX(${amountCol}) AS maximum FROM ${targetTable}${whereClause}`;
+                result.explanation = `Maximum ${amountCol} from ${targetTable}`;
+                result.chartType = 'number';
+            }
         }
         // ── MIN queries ──
         else if (AGG_PATTERNS.min.test(q)) {
-            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating/i) || colNames[colNames.length - 1];
-            result.sql = `SELECT MIN(${amountCol}) AS minimum FROM ${targetTable}${whereClause}`;
-            result.explanation = isMalay ? `Nilai terendah ${amountCol} dari ${targetTable}` : `Minimum ${amountCol} from ${targetTable}`;
-            result.chartType = 'number';
+            const amountCol = this._findColumn(colNames, /amount|total|price|revenue|fee|value|balance|score|rating|subtotal/i);
+            if (!amountCol) {
+                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
+                result.explanation = `Earliest record from ${targetTable}`;
+                result.chartType = 'table';
+            } else {
+                result.sql = `SELECT MIN(${amountCol}) AS minimum FROM ${targetTable}${whereClause}`;
+                result.explanation = `Minimum ${amountCol} from ${targetTable}`;
+                result.chartType = 'number';
+            }
         }
         // ── TREND / MONTHLY / TIME-SERIES ──
         else if (/trend|bulan|month|monthly|bulanan|daily|harian|weekly|mingguan|over\s*time|growth|per\s*(day|week|month|year)/i.test(q)) {
@@ -593,13 +633,13 @@ Rules:
 
     /**
      * Build WHERE clause from natural language conditions.
-     * Detects time filters, status filters, and value conditions.
+     * Only adds conditions for columns that actually exist in the table.
      * @private
      */
     _buildWhereClause(q, colNames, cols, isMySQL) {
         const conditions = [];
 
-        // Time filters
+        // Time filters — only if date column exists
         const dateCol = this._findColumn(colNames, /date|created|time|updated|registered|joined|occurred|timestamp/i);
         if (dateCol) {
             for (const [period, pattern] of Object.entries(TIME_PATTERNS)) {
@@ -610,13 +650,12 @@ Rules:
             }
         }
 
-        // Status filters
-        const statusCol = this._findColumn(colNames, /status|state|active|is_active|enabled/i);
+        // Status filters — only if status column exists
+        const statusCol = this._findColumn(colNames, /status|state|is_active|enabled/i);
         if (statusCol) {
             for (const [status, pattern] of Object.entries(STATUS_KEYWORDS)) {
                 if (pattern.test(q)) {
-                    if (statusCol.includes('is_') || statusCol.includes('active')) {
-                        // Boolean column
+                    if (statusCol.includes('is_') || statusCol === 'active') {
                         conditions.push(`${statusCol} = ${status === 'active' ? '1' : '0'}`);
                     } else {
                         conditions.push(`${statusCol} = '${status}'`);
@@ -626,8 +665,8 @@ Rules:
             }
         }
 
-        // Role/type filter
-        const typeCol = this._findColumn(colNames, /type|role|jenis|level|position|tier|category/i);
+        // Role/type filter — only if type/role column exists AND isn't same as statusCol
+        const typeCol = this._findColumn(colNames, /^type$|^role$|^jenis$|^level$|^position$|^tier$|^category$/i);
         if (typeCol && typeCol !== statusCol) {
             const roleMatch = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|user|manager|staff|operator|superadmin|premium|free|basic|pro|enterprise)\b/i);
             if (roleMatch) conditions.push(`${typeCol} = '${roleMatch[1]}'`);
