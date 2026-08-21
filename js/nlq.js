@@ -75,7 +75,7 @@ YDB.NLQ = {
                 connectionId = YDB.State.activeConnection.id;
                 document.getElementById('nlq-connection').value = connectionId;
             } else {
-                YDB.UI.toast('Sila pilih connection database terlebih dahulu', 'warning');
+                YDB.UI.toast('Please select a database connection first', 'warning');
                 return;
             }
         }
@@ -289,7 +289,7 @@ YDB.NLQ = {
             div.innerHTML = '<div class="chat-bubble bg-primary text-primary-content text-sm">' + YDB.UI.esc(content) + '</div>';
         } else if (type === 'bot-loading') {
             div.className = 'chat chat-start';
-            div.innerHTML = '<div class="chat-bubble bg-base-200 text-base-content text-sm"><span class="loading loading-dots loading-xs"></span> Memproses soalan anda...</div>';
+            div.innerHTML = '<div class="chat-bubble bg-base-200 text-base-content text-sm"><span class="loading loading-dots loading-xs"></span> Analyzing your question...</div>';
         } else if (type === 'bot-error') {
             div.className = 'chat chat-start';
             div.innerHTML = '<div class="chat-bubble bg-error/10 text-error text-sm"><i data-lucide="alert-circle" class="w-3 h-3 inline"></i> ' + YDB.UI.esc(content) + '</div>';
@@ -318,9 +318,9 @@ YDB.NLQ = {
      */
     clearChat: function () {
         var container = document.getElementById('nlq-messages');
-        container.innerHTML = '<div class="chat chat-start"><div class="chat-bubble chat-bubble-primary text-sm">' +
+        container.innerHTML = '<div class="chat chat-start"><div class="chat-bubble bg-base-200 text-base-content text-sm">' +
             '<p class="font-semibold mb-1">👋 Chat cleared!</p>' +
-            '<p>Tanya soalan baru tentang data anda.</p></div></div>';
+            '<p>Ask a new question about your data.</p></div></div>';
         this.history = [];
         document.getElementById('nlq-results-panel').style.display = 'none';
     },
