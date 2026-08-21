@@ -14,12 +14,27 @@ class MySQLAdapter extends BaseAdapter {
             user: this.opts.user,
             password: this.opts.password,
             database: this.opts.database,
-            connectTimeout: 15000,
-            // Enable SSL for cloud-hosted MySQL (Alibaba, Aiven, AWS RDS, etc.)
-            ssl: this.opts.ssl === false ? undefined : { rejectUnauthorized: false }
+            connectTimeout: 15000
         };
-        this.connection = await mysql.createConnection(connOpts);
-        this.connected = true;
+
+        // Only enable SSL if explicitly requested via options
+        if (this.opts.ssl === true) {
+            connOpts.ssl = { rejectUnauthorized: false };
+        }
+
+        try {
+            this.connection = await mysql.createConnection(connOpts);
+            this.connected = true;
+        } catch (err) {
+            // If connection fails without SSL, try with SSL (some cloud DBs require it)
+            if (!connOpts.ssl && err.message && err.message.includes('SSL')) {
+                connOpts.ssl = { rejectUnauthorized: false };
+                this.connection = await mysql.createConnection(connOpts);
+                this.connected = true;
+            } else {
+                throw err;
+            }
+        }
     }
 
     async query(sql) {
