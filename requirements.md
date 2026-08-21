@@ -90,8 +90,8 @@ yDB is a production-grade, web-based database management platform with multi-con
 | POST | /api/query/:execId/cancel | Yes | Cancel running query |
 | GET | /api/query/executions | Yes | List executions |
 | POST | /api/federated/execute | Yes | Cross-DB join (DuckDB) |
-| **POST** | **/api/nlq/ask** | **Yes** | **Natural language → SQL → results** |
-| **POST** | **/api/nlq/suggest** | **Yes** | **Get suggested questions** |
+| POST | /api/nlq/ask | Yes | Natural language → SQL → results |
+| POST | /api/nlq/suggest | Yes | Get suggested questions |
 | GET | /api/explorer/:id/schema | Yes | Get schema |
 | GET | /api/explorer/:id/tables/:t/data | Yes | Get table data |
 | GET | /api/stream/query | Yes | SSE streaming |
