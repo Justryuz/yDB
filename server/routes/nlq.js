@@ -53,7 +53,8 @@ router.post('/ask', async (req, res) => {
 /**
  * POST /api/nlq/suggest
  * Body: { connectionId }
- * Returns suggested questions based on schema.
+ * Returns smart suggested questions based on actual database schema analysis.
+ * Analyzes tables, columns, data types to suggest relevant queries.
  */
 router.post('/suggest', async (req, res) => {
     try {
@@ -63,8 +64,13 @@ router.post('/suggest', async (req, res) => {
         }
 
         const db = require('../db/pool');
+        const crypto = require('crypto');
+        const config = require('../config');
+        const poolManager = require('../services/pool-manager');
+        const { withTunnel } = require('../services/ssh-tunnel');
+
         const connResult = await db.query(
-            'SELECT db_type, database_name FROM connections WHERE id = $1 AND user_id = $2',
+            'SELECT * FROM connections WHERE id = $1 AND user_id = $2',
             [connectionId, req.user.id]
         );
         if (!connResult.rows.length) {
@@ -72,23 +78,115 @@ router.post('/suggest', async (req, res) => {
         }
 
         const conn = connResult.rows[0];
+        let password = '';
+        try {
+            const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+            if (conn.password_encrypted) {
+                const [ivHex, encrypted] = conn.password_encrypted.split(':');
+                const iv = Buffer.from(ivHex, 'hex');
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+            }
+        } catch (e) { /* proceed without password */ }
 
-        // Generate smart suggestions based on DB type
-        const suggestions = [
-            `Berapa jumlah rekod dalam database?`,
-            `Tunjukkan 10 data terkini`,
-            `Senaraikan semua jadual`,
-            `Berapa jumlah mengikut status?`,
-            `Top 5 rekod tertinggi`,
-            `Data mengikut bulan`,
-            `Show total count per category`,
-            `What are the latest 20 records?`
-        ];
+        const options = conn.options || {};
+        const { opts, cleanup } = await withTunnel(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
+            options.ssh
+        );
 
-        res.json({ suggestions, dbType: conn.db_type, database: conn.database_name });
+        let schema;
+        try {
+            const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+            schema = await adapter.getSchema();
+        } catch (err) {
+            cleanup();
+            return res.json({ suggestions: ['How many records are there?', 'Show latest 20 records'], tables: [], dbType: conn.db_type });
+        }
+        cleanup();
+
+        // Analyze schema and generate intelligent suggestions
+        const suggestions = generateSmartSuggestions(schema, conn.db_type);
+
+        res.json({
+            suggestions: suggestions.questions,
+            categories: suggestions.categories,
+            tables: Object.keys(schema.tables || {}),
+            dbType: conn.db_type,
+            database: conn.database_name
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
+/**
+ * Generate smart suggestions by analyzing the database schema.
+ * Groups suggestions into categories: counts, aggregations, trends, breakdowns, lists.
+ */
+function generateSmartSuggestions(schema, dbType) {
+    const tables = Object.entries(schema.tables || {});
+    const questions = [];
+    const categories = [];
+
+    for (const [tableName, tableInfo] of tables) {
+        const cols = (tableInfo.columns || []).map(c => c.name || c);
+        const readableName = tableName.replace(/_/g, ' ');
+
+        // Detect column types
+        const dateCols = cols.filter(c => /date|created|time|updated|registered|joined|timestamp/i.test(c));
+        const amountCols = cols.filter(c => /amount|total|price|revenue|sales|value|fee|commission|balance|subtotal|gross|cost|salary|earning/i.test(c));
+        const statusCols = cols.filter(c => /^status$|^state$|^type$|^role$|^category$|^level$/i.test(c));
+        const nameCols = cols.filter(c => /name|nama|title|label|username|email|company/i.test(c));
+
+        // COUNT suggestion
+        questions.push({ q: `How many ${readableName}?`, category: 'count', table: tableName });
+
+        // SUM suggestions for amount columns
+        for (const col of amountCols.slice(0, 2)) {
+            questions.push({ q: `Total ${col} from ${readableName}`, category: 'sum', table: tableName });
+        }
+
+        // TREND suggestions if date + amount columns exist
+        if (dateCols.length > 0) {
+            if (amountCols.length > 0) {
+                questions.push({ q: `Monthly ${amountCols[0]} trend from ${readableName}`, category: 'trend', table: tableName });
+            } else {
+                questions.push({ q: `Monthly trend of ${readableName}`, category: 'trend', table: tableName });
+            }
+        }
+
+        // BREAKDOWN suggestions for status/type columns
+        for (const col of statusCols.slice(0, 1)) {
+            questions.push({ q: `Breakdown of ${readableName} by ${col}`, category: 'breakdown', table: tableName });
+        }
+
+        // TOP-N suggestions if amount columns exist
+        if (amountCols.length > 0 && nameCols.length > 0) {
+            questions.push({ q: `Top 10 ${readableName} by ${amountCols[0]}`, category: 'ranking', table: tableName });
+        }
+
+        // RECENT data
+        if (dateCols.length > 0) {
+            questions.push({ q: `Latest 10 ${readableName}`, category: 'recent', table: tableName });
+        }
+    }
+
+    // Build categories from unique types
+    const catSet = new Set(questions.map(q => q.category));
+    for (const cat of catSet) {
+        const label = { count: 'Counts', sum: 'Totals', trend: 'Trends', breakdown: 'Breakdowns', ranking: 'Rankings', recent: 'Recent' }[cat] || cat;
+        categories.push({ id: cat, label, icon: { count: '🔢', sum: '💰', trend: '📈', breakdown: '🧩', ranking: '🏆', recent: '🕐' }[cat] || '📊' });
+    }
+
+    // Limit to most useful suggestions (max 20)
+    const prioritized = [];
+    for (const cat of ['count', 'sum', 'trend', 'breakdown', 'ranking', 'recent']) {
+        const catItems = questions.filter(q => q.category === cat).slice(0, 4);
+        prioritized.push(...catItems);
+    }
+
+    return { questions: prioritized.slice(0, 20), categories };
+}
 
 module.exports = router;

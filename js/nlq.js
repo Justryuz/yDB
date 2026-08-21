@@ -30,7 +30,7 @@ YDB.NLQ = {
             document.getElementById('nlq-results-panel').style.display = 'none';
         });
 
-        // Suggestion buttons
+        // Suggestion buttons (static ones — will be replaced by dynamic)
         document.querySelectorAll('.nlq-suggest').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 document.getElementById('nlq-input').value = this.dataset.q;
@@ -45,6 +45,13 @@ YDB.NLQ = {
                 self.populateConnections();
             });
         }
+
+        // Load dynamic suggestions when connection changes
+        document.getElementById('nlq-connection').addEventListener('change', function () {
+            if (this.value) {
+                self.loadSuggestions(this.value);
+            }
+        });
 
         this.populateConnections();
     },
@@ -69,8 +76,10 @@ YDB.NLQ = {
             // Auto-select active connection
             if (YDB.State.activeConnection) {
                 sel.value = YDB.State.activeConnection.id;
+                self.loadSuggestions(YDB.State.activeConnection.id);
             } else if (conns.length === 1) {
                 sel.value = conns[0].id;
+                self.loadSuggestions(conns[0].id);
             }
         }
 
@@ -86,6 +95,79 @@ YDB.NLQ = {
                 renderOptions(YDB.State.connections);
             }).catch(function () {});
         }
+    },
+
+    /**
+     * Load dynamic suggestions based on actual database schema.
+     * Calls POST /api/nlq/suggest and renders smart suggestion chips.
+     */
+    loadSuggestions: function (connectionId) {
+        var self = this;
+        var container = document.getElementById('nlq-suggestions');
+
+        container.innerHTML = '<div class="flex items-center gap-2 text-xs text-base-content/50"><span class="loading loading-spinner loading-xs"></span> Analyzing schema...</div>';
+
+        YDB.API.post('/nlq/suggest', { connectionId: parseInt(connectionId) })
+            .then(function (data) {
+                var suggestions = data.suggestions || [];
+                var categories = data.categories || [];
+
+                if (!suggestions.length) {
+                    container.innerHTML = '<div class="text-xs text-base-content/50">No suggestions available</div>';
+                    return;
+                }
+
+                var html = '';
+
+                // Group by category with icons
+                var grouped = {};
+                suggestions.forEach(function (s) {
+                    var cat = s.category || 'general';
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(s);
+                });
+
+                // Render category tabs + suggestion chips
+                var catIcons = { count: '🔢', sum: '💰', trend: '📈', breakdown: '🧩', ranking: '🏆', recent: '🕐' };
+
+                html += '<div class="flex gap-1 flex-wrap">';
+                for (var cat in grouped) {
+                    var icon = catIcons[cat] || '📊';
+                    grouped[cat].forEach(function (s) {
+                        html += '<button class="btn btn-xs btn-outline nlq-suggest-dynamic" data-q="' + self._escAttr(s.q) + '" title="' + (s.table || '') + '">';
+                        html += icon + ' ' + self._truncate(s.q, 30);
+                        html += '</button>';
+                    });
+                }
+                html += '</div>';
+
+                container.innerHTML = html;
+
+                // Bind click handlers
+                container.querySelectorAll('.nlq-suggest-dynamic').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        document.getElementById('nlq-input').value = this.dataset.q;
+                        self.ask();
+                    });
+                });
+            })
+            .catch(function () {
+                container.innerHTML = '<div class="flex gap-2 flex-wrap"><button class="btn btn-xs btn-outline nlq-suggest" data-q="How many records?">Count records</button><button class="btn btn-xs btn-outline nlq-suggest" data-q="Show latest 20 records">Latest</button></div>';
+            });
+    },
+
+    /**
+     * Escape HTML attribute value
+     */
+    _escAttr: function (str) {
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+
+    /**
+     * Truncate string with ellipsis
+     */
+    _truncate: function (str, max) {
+        return str.length > max ? str.substring(0, max) + '...' : str;
     },
 
     /**
