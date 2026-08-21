@@ -38,25 +38,53 @@ YDB.NLQ = {
             });
         });
 
-        // Populate connections dropdown when tab becomes active
+        // Refresh connections when tab becomes visible
+        var copilotTab = document.querySelector('[data-tab="copilot"]');
+        if (copilotTab) {
+            copilotTab.addEventListener('click', function () {
+                self.populateConnections();
+            });
+        }
+
         this.populateConnections();
     },
 
     /**
-     * Populate the connection selector dropdown
+     * Populate the connection selector dropdown.
+     * Fetches from API if state is empty.
      */
     populateConnections: function () {
         var sel = document.getElementById('nlq-connection');
-        var conns = YDB.State.connections || [];
-        var opts = '<option value="">Select connection...</option>';
-        conns.forEach(function (c) {
-            opts += '<option value="' + c.id + '">' + c.name + ' (' + (c.type || c.db_type) + ')</option>';
-        });
-        sel.innerHTML = opts;
+        var self = this;
 
-        // Auto-select active connection
-        if (YDB.State.activeConnection) {
-            sel.value = YDB.State.activeConnection.id;
+        function renderOptions(conns) {
+            var opts = '<option value="">Select connection...</option>';
+            conns.forEach(function (c) {
+                var dbType = c.type || c.db_type || '';
+                var label = c.name + (dbType ? ' (' + dbType + ')' : '');
+                opts += '<option value="' + c.id + '">' + label + '</option>';
+            });
+            sel.innerHTML = opts;
+
+            // Auto-select active connection
+            if (YDB.State.activeConnection) {
+                sel.value = YDB.State.activeConnection.id;
+            } else if (conns.length === 1) {
+                sel.value = conns[0].id;
+            }
+        }
+
+        // Use state if available
+        if (YDB.State.connections && YDB.State.connections.length > 0) {
+            renderOptions(YDB.State.connections);
+        } else if (YDB.API.isOnline() && YDB.API.token) {
+            // Fetch from API
+            YDB.API.get('/connections').then(function (conns) {
+                YDB.State.connections = conns.map(function (c) {
+                    return { id: c.id, name: c.name, type: c.db_type, host: c.host, port: c.port, username: c.username, database: c.database_name };
+                });
+                renderOptions(YDB.State.connections);
+            }).catch(function () {});
         }
     },
 
