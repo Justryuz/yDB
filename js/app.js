@@ -70,6 +70,7 @@
         YDB.Notifications.init();
         YDB.Plugins.init();
         YDB.APIClient.init();
+        YDB.NLQ.init();
 
         // ── 7. Admin Sub-tab Navigation ───────────────────────
         _initAdminSubtabs();

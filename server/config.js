@@ -77,5 +77,14 @@ module.exports = {
         s3Region: process.env.BACKUP_S3_REGION || 'us-east-1',
         intervalHours: parseInt(process.env.BACKUP_INTERVAL_HOURS) || 6,
         retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30
+    },
+
+    // NLQ (Natural Language Query) — Text-to-SQL AI provider
+    nlq: {
+        provider: process.env.NLQ_PROVIDER || 'builtin', // 'builtin', 'bedrock', 'openai'
+        model: process.env.NLQ_MODEL || 'anthropic.claude-3-haiku-20240307-v1:0',
+        region: process.env.NLQ_REGION || 'us-east-1',
+        apiKey: process.env.NLQ_API_KEY || '',
+        baseUrl: process.env.NLQ_BASE_URL || 'https://api.openai.com/v1'
     }
 };

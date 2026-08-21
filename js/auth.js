@@ -201,6 +201,7 @@ YDB.Auth = {
         YDB.Users.render();
         YDB.FormBuilder.populateTables();
         YDB.Plugins.render();
+        YDB.NLQ.populateConnections();
 
         YDB.UI.icons();
         YDB.UI.toast('Welcome, ' + YDB.State.user + '!', 'success');
