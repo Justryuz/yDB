@@ -116,16 +116,16 @@ YDB.NLQ = {
         var html = '<div class="space-y-2">';
 
         // Explanation
-        html += '<p class="text-sm">' + YDB.UI.esc(result.explanation) + '</p>';
+        html += '<p class="text-sm font-medium text-base-content">' + YDB.UI.esc(result.explanation) + '</p>';
 
         // SQL (collapsible)
-        html += '<details class="collapse collapse-arrow bg-base-200 rounded">';
-        html += '<summary class="collapse-title text-xs font-mono p-2 min-h-0">SQL Generated</summary>';
-        html += '<div class="collapse-content p-2"><pre class="text-xs font-mono whitespace-pre-wrap text-primary">' + YDB.UI.esc(result.sql) + '</pre></div>';
+        html += '<details class="rounded border border-base-300 bg-base-300/30">';
+        html += '<summary class="text-xs font-mono p-2 cursor-pointer text-base-content/80">SQL Generated</summary>';
+        html += '<div class="p-2 border-t border-base-300"><pre class="text-xs font-mono whitespace-pre-wrap text-success">' + YDB.UI.esc(result.sql) + '</pre></div>';
         html += '</details>';
 
         // Quick stats
-        html += '<div class="flex gap-2 text-xs text-base-content/60">';
+        html += '<div class="flex gap-2 text-xs text-base-content/70">';
         html += '<span>' + (result.rowCount || 0) + ' rows</span>';
         if (result.duration) html += '<span>• ' + result.duration + 'ms</span>';
         html += '<span>• ' + result.chartType + '</span>';
@@ -134,8 +134,8 @@ YDB.NLQ = {
         // Inline result preview
         if (result.chartType === 'number' && result.data && result.data.length) {
             var val = Object.values(result.data[0])[0];
-            html += '<div class="stat bg-primary/10 rounded-lg p-3">';
-            html += '<div class="stat-value text-primary text-2xl">' + self._formatNumber(val) + '</div>';
+            html += '<div class="bg-base-300/50 rounded-lg p-3 text-center">';
+            html += '<div class="text-2xl font-bold text-primary">' + self._formatNumber(val) + '</div>';
             html += '</div>';
         } else if (result.data && result.data.length) {
             // Show mini table (max 5 rows inline)
@@ -255,19 +255,19 @@ YDB.NLQ = {
      * Build a mini HTML table
      */
     _buildMiniTable: function (columns, data) {
-        var html = '<div class="overflow-x-auto"><table class="table table-xs table-zebra">';
-        html += '<thead><tr>';
+        var html = '<div class="overflow-x-auto rounded border border-base-300"><table class="table table-xs">';
+        html += '<thead><tr class="bg-base-300/50">';
         columns.forEach(function (col) {
             var name = typeof col === 'string' ? col : col.name || col;
-            html += '<th class="text-xs">' + name + '</th>';
+            html += '<th class="text-xs text-base-content/80 font-semibold">' + name + '</th>';
         });
         html += '</tr></thead><tbody>';
-        data.forEach(function (row) {
-            html += '<tr>';
+        data.forEach(function (row, i) {
+            html += '<tr class="' + (i % 2 === 0 ? '' : 'bg-base-300/20') + '">';
             columns.forEach(function (col) {
                 var key = typeof col === 'string' ? col : col.name || col;
                 var val = row[key];
-                html += '<td class="text-xs">' + (val !== null && val !== undefined ? val : '') + '</td>';
+                html += '<td class="text-xs text-base-content">' + (val !== null && val !== undefined ? val : '<span class="opacity-40">NULL</span>') + '</td>';
             });
             html += '</tr>';
         });
@@ -286,17 +286,17 @@ YDB.NLQ = {
 
         if (type === 'user') {
             div.className = 'chat chat-end';
-            div.innerHTML = '<div class="chat-bubble text-sm">' + YDB.UI.esc(content) + '</div>';
+            div.innerHTML = '<div class="chat-bubble bg-primary text-primary-content text-sm">' + YDB.UI.esc(content) + '</div>';
         } else if (type === 'bot-loading') {
             div.className = 'chat chat-start';
-            div.innerHTML = '<div class="chat-bubble chat-bubble-primary text-sm"><span class="loading loading-dots loading-xs"></span> Memproses soalan anda...</div>';
+            div.innerHTML = '<div class="chat-bubble bg-base-200 text-base-content text-sm"><span class="loading loading-dots loading-xs"></span> Memproses soalan anda...</div>';
         } else if (type === 'bot-error') {
             div.className = 'chat chat-start';
-            div.innerHTML = '<div class="chat-bubble chat-bubble-error text-sm"><i data-lucide="alert-circle" class="w-3 h-3 inline"></i> ' + YDB.UI.esc(content) + '</div>';
+            div.innerHTML = '<div class="chat-bubble bg-error/10 text-error text-sm"><i data-lucide="alert-circle" class="w-3 h-3 inline"></i> ' + YDB.UI.esc(content) + '</div>';
         } else {
             // bot response (HTML)
             div.className = 'chat chat-start';
-            div.innerHTML = '<div class="chat-bubble chat-bubble-primary text-sm max-w-lg">' + content + '</div>';
+            div.innerHTML = '<div class="chat-bubble bg-base-200 text-base-content text-sm max-w-lg">' + content + '</div>';
         }
 
         container.appendChild(div);

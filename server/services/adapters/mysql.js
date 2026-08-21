@@ -8,14 +8,17 @@ const BaseAdapter = require('./base');
 class MySQLAdapter extends BaseAdapter {
     async connect() {
         const mysql = require('mysql2/promise');
-        this.connection = await mysql.createConnection({
+        const connOpts = {
             host: this.opts.host,
             port: this.opts.port,
             user: this.opts.user,
             password: this.opts.password,
             database: this.opts.database,
-            connectTimeout: 10000
-        });
+            connectTimeout: 15000,
+            // Enable SSL for cloud-hosted MySQL (Alibaba, Aiven, AWS RDS, etc.)
+            ssl: this.opts.ssl === false ? undefined : { rejectUnauthorized: false }
+        };
+        this.connection = await mysql.createConnection(connOpts);
         this.connected = true;
     }
 
