@@ -306,7 +306,7 @@ class QueryPlanner {
 
     buildPlan() {
         const intent = this._detectIntent();
-        if (intent === 'greeting') return { intent: 'greeting', confidence: 1.0, sql: '', explanation: 'Hello! I am your BI Copilot. Ask me a question about your data — for example: "How many users?", "Total revenue this month", "Top 10 products by sales", or "Monthly trend".' };
+        if (intent === 'greeting') return { intent: 'greeting', confidence: 1.0, sql: '', explanation: 'Hello! I am your Copilot. Ask me a question about your data — for example: "How many users?", "Total revenue this month", "Top 10 products by sales", or "Monthly trend".' };
 
         const tables = Object.keys(this.si.tables);
         if (tables.length === 0) return { intent: 'error', confidence: 0, sql: '', explanation: 'No tables found in the connected database.' };
