@@ -237,7 +237,7 @@ class NLQEngine {
         // -- COUNT --
         if (AGG_PATTERNS.count.test(q)) {
             result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-            result.explanation = `Total record count from ${targetTable}`;
+            result.explanation = `Here's the total number of records in your ${this._humanize(targetTable)} data.${whereClause ? ' (filtered by your specified criteria)' : ''}`;
             result.chartType = 'number';
         }
         // -- SUM --
@@ -245,10 +245,10 @@ class NLQEngine {
             const col = this._findAmountColumn(cols, schema, tables, targetTable);
             if (col.found) {
                 result.sql = `SELECT SUM(${col.name}) AS total FROM ${col.table}${whereClause}`;
-                result.explanation = `Sum of ${col.name} from ${col.table}`;
+                result.explanation = `The total accumulated ${this._humanize(col.name)} across all ${this._humanize(col.table)} records.${whereClause ? ' Results are filtered based on your criteria.' : ' This represents the complete sum without any filters.'}`;
             } else {
                 result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-                result.explanation = `No amount column found - showing count from ${targetTable}`;
+                result.explanation = `No monetary/amount column was found in ${this._humanize(targetTable)}. Showing the total record count instead.`;
             }
             result.chartType = 'number';
         }
@@ -257,12 +257,12 @@ class NLQEngine {
             const dateCol = this._findCol(cols, /date|created|time|updated|registered|joined|timestamp/i) || 'created_at';
             const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|value|fee|subtotal/i);
             const valueExpr = amtCol ? `SUM(${amtCol})` : 'COUNT(*)';
-            let fmt, alias;
-            if (/\bdaily\b|\bper day\b/i.test(q)) { fmt = isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`; alias = 'day'; }
-            else if (/\bweekly\b|\bper week\b/i.test(q)) { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`; alias = 'week'; }
-            else { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-%m')` : `TO_CHAR(${dateCol}, 'YYYY-MM')`; alias = 'month'; }
+            let fmt, alias, period;
+            if (/\bdaily\b|\bper day\b/i.test(q)) { fmt = isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`; alias = 'day'; period = 'daily'; }
+            else if (/\bweekly\b|\bper week\b/i.test(q)) { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`; alias = 'week'; period = 'weekly'; }
+            else { fmt = isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-%m')` : `TO_CHAR(${dateCol}, 'YYYY-MM')`; alias = 'month'; period = 'monthly'; }
             result.sql = `SELECT ${fmt} AS ${alias}, ${valueExpr} AS total FROM ${targetTable}${whereClause} GROUP BY ${alias} ORDER BY ${alias} DESC LIMIT 12`;
-            result.explanation = `${alias.charAt(0).toUpperCase() + alias.slice(1)}ly trend from ${targetTable}`;
+            result.explanation = `This chart shows the ${period} ${amtCol ? this._humanize(amtCol) + ' volume' : 'activity'} for ${this._humanize(targetTable)} over the last 12 periods. Use this to identify growth patterns and seasonal trends.`;
             result.chartType = /daily/i.test(q) ? 'line' : 'bar';
         }
         // -- BREAKDOWN / GROUP BY --
@@ -271,7 +271,7 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|value|fee|subtotal/i);
             const agg = amtCol ? `SUM(${amtCol})` : 'COUNT(*)';
             result.sql = `SELECT ${groupCol}, ${agg} AS total FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY total DESC LIMIT 20`;
-            result.explanation = `Breakdown by ${groupCol} from ${targetTable}`;
+            result.explanation = `Distribution of ${this._humanize(targetTable)} segmented by ${this._humanize(groupCol)}. This helps you understand the composition and identify which segments require attention.`;
             result.chartType = 'pie';
         }
         // -- TOP-N --
@@ -280,7 +280,7 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|balance|fee|value|score|subtotal|commission/i) || cols[cols.length - 1] || 'id';
             const nameCol = this._findCol(cols, /name|title|label|username|email|phone|company|item_name/i) || cols[0] || 'id';
             result.sql = `SELECT ${nameCol}, ${amtCol} FROM ${targetTable}${whereClause} ORDER BY ${amtCol} DESC LIMIT ${n}`;
-            result.explanation = `Top ${n} by ${amtCol} from ${targetTable}`;
+            result.explanation = `Top ${n} ${this._humanize(targetTable)} ranked by ${this._humanize(amtCol)} in descending order. These represent your highest-performing entries.`;
             result.chartType = 'bar';
         }
         // -- BOTTOM-N --
@@ -289,7 +289,7 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|sales|balance|fee|value/i) || cols[cols.length - 1] || 'id';
             const nameCol = this._findCol(cols, /name|title|label|username|email/i) || cols[0] || 'id';
             result.sql = `SELECT ${nameCol}, ${amtCol} FROM ${targetTable}${whereClause} ORDER BY ${amtCol} ASC LIMIT ${n}`;
-            result.explanation = `Bottom ${n} by ${amtCol} from ${targetTable}`;
+            result.explanation = `Bottom ${n} ${this._humanize(targetTable)} ranked by ${this._humanize(amtCol)} — the lowest-performing entries that may need review or intervention.`;
             result.chartType = 'bar';
         }
         // -- AVERAGE --
@@ -297,10 +297,10 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|rating|score|subtotal/i);
             if (amtCol) {
                 result.sql = `SELECT ROUND(AVG(${amtCol}), 2) AS average FROM ${targetTable}${whereClause}`;
-                result.explanation = `Average ${amtCol} from ${targetTable}`;
+                result.explanation = `The average ${this._humanize(amtCol)} across your ${this._humanize(targetTable)} dataset. Compare this against individual entries to identify outliers.`;
             } else {
                 result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-                result.explanation = `No numeric column for average - showing count from ${targetTable}`;
+                result.explanation = `No numeric column found suitable for averaging. Showing total count for ${this._humanize(targetTable)} instead.`;
             }
             result.chartType = 'number';
         }
@@ -309,11 +309,11 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|balance|score|subtotal/i);
             if (amtCol) {
                 result.sql = `SELECT MAX(${amtCol}) AS maximum FROM ${targetTable}${whereClause}`;
-                result.explanation = `Maximum ${amtCol} from ${targetTable}`;
+                result.explanation = `The highest ${this._humanize(amtCol)} value recorded in ${this._humanize(targetTable)}. This is your peak performance metric.`;
                 result.chartType = 'number';
             } else {
                 result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
-                result.explanation = `Latest record from ${targetTable}`;
+                result.explanation = `Showing the most recent record from ${this._humanize(targetTable)}.`;
             }
         }
         // -- MIN --
@@ -321,11 +321,11 @@ class NLQEngine {
             const amtCol = this._findCol(cols, /amount|total|price|revenue|fee|value|balance|score|subtotal/i);
             if (amtCol) {
                 result.sql = `SELECT MIN(${amtCol}) AS minimum FROM ${targetTable}${whereClause}`;
-                result.explanation = `Minimum ${amtCol} from ${targetTable}`;
+                result.explanation = `The lowest ${this._humanize(amtCol)} value in ${this._humanize(targetTable)}. Review this to understand your baseline.`;
                 result.chartType = 'number';
             } else {
                 result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
-                result.explanation = `Earliest record from ${targetTable}`;
+                result.explanation = `Showing the earliest record from ${this._humanize(targetTable)}.`;
             }
         }
         // -- WHO / WHICH --
@@ -337,45 +337,45 @@ class NLQEngine {
                 if (m) filter = ` WHERE ${typeCol} = '${m[1]}'`;
             }
             result.sql = `SELECT * FROM ${targetTable}${filter} ORDER BY id DESC LIMIT 25`;
-            result.explanation = `Records from ${targetTable}${filter ? ' (filtered)' : ''}`;
+            result.explanation = `Here are the matching records from ${this._humanize(targetTable)}.${filter ? ' Filtered to show only relevant entries based on your criteria.' : ''}`;
         }
         // -- RECENT / LATEST --
         else if (/\b(recent|latest|newest|last)\b/i.test(q) && !/\blast\s*(week|month|year|quarter|\d)/i.test(q)) {
             const dateCol = this._findCol(cols, /date|created|time|updated|registered|timestamp/i) || 'created_at';
             const n = Math.min(parseInt((q.match(/\d+/) || ['20'])[0]), 100);
             result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY ${dateCol} DESC LIMIT ${n}`;
-            result.explanation = `${n} most recent records from ${targetTable}`;
+            result.explanation = `The ${n} most recent entries in ${this._humanize(targetTable)}, sorted by newest first. This gives you a real-time snapshot of current activity.`;
         }
         // -- SEARCH / FIND --
         else if (/\b(find|search|look for|locate)\b/i.test(q)) {
             const term = q.replace(/\b(find|search|look\s*for|locate)\b/gi, '').trim();
             const searchCol = this._findCol(cols, /name|title|email|phone|username|description|label/i) || cols[0];
             result.sql = `SELECT * FROM ${targetTable} WHERE ${searchCol} LIKE '%${term.replace(/'/g, "''")}%' LIMIT 25`;
-            result.explanation = `Search "${term}" in ${targetTable}`;
+            result.explanation = `Search results for "${term}" in ${this._humanize(targetTable)}. Matching against the ${this._humanize(searchCol)} field.`;
         }
         // -- LIST / SHOW --
         else if (/\b(list|show|display|all|view)\b/i.test(q)) {
             const n = Math.min(parseInt((q.match(/\d+/) || ['50'])[0]), 100);
             result.sql = `SELECT * FROM ${targetTable}${whereClause} LIMIT ${n}`;
-            result.explanation = `Listing records from ${targetTable}`;
+            result.explanation = `Displaying ${n} records from ${this._humanize(targetTable)}.${whereClause ? ' Filtered by your specified criteria.' : ' Showing all available data.'}`;
         }
         // -- COMPARE --
         else if (/\b(compare|versus|vs|difference)\b/i.test(q)) {
             const groupCol = this._findCol(cols, /^status$|^type$|^category$|^role$/i) || cols[1];
             result.sql = `SELECT ${groupCol}, COUNT(*) AS count FROM ${targetTable}${whereClause} GROUP BY ${groupCol} ORDER BY count DESC`;
-            result.explanation = `Comparison by ${groupCol} from ${targetTable}`;
+            result.explanation = `Comparative analysis of ${this._humanize(targetTable)} grouped by ${this._humanize(groupCol)}. Use this to identify relative strengths across categories.`;
             result.chartType = 'bar';
         }
         // -- GENERIC "how much" / "how many" fallback --
         else if (/\bhow (much|many)\b/i.test(q)) {
             result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-            result.explanation = `Count from ${targetTable}`;
+            result.explanation = `Total count of records in ${this._humanize(targetTable)}.`;
             result.chartType = 'number';
         }
         // -- DEFAULT --
         else {
             result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY 1 DESC LIMIT 25`;
-            result.explanation = `Data from ${targetTable}`;
+            result.explanation = `Here's a sample of data from ${this._humanize(targetTable)}. Try asking more specific questions like "how many", "total amount", "monthly trend", or "breakdown by status" for deeper insights.`;
         }
 
         return result;
@@ -522,6 +522,15 @@ class NLQEngine {
         const m = q.match(/\bby\s+(\w+)/i);
         if (m) { const found = cols.find(c => c.toLowerCase().includes(m[1].toLowerCase())); if (found) return found; }
         return null;
+    }
+
+    /**
+     * Convert table/column names to human-readable format.
+     * e.g. "order_items" -> "Order Items", "created_at" -> "Created At"
+     */
+    _humanize(str) {
+        if (!str) return '';
+        return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
 
     _buildSchemaContext(schema) {
