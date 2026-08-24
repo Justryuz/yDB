@@ -630,64 +630,129 @@ function analyzeResults(results, plan) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION 11: NLQ ENGINE (Main Class - backward compatible)
+// SECTION 11: NLQ ENGINE (Main Class - hybrid: builtin + LLM with vector store)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const vectorStore = require('./nlq-vector-store');
 
 class NLQEngine {
     constructor() {}
 
     async generateSQL(opts) {
-        const { question, schema, dbType, userId } = opts;
+        const { question, schema, dbType, userId, connectionId } = opts;
 
-        // Use LLM if configured
+        // Use LLM pipeline if configured (with vector retrieval + full DDL context)
         if (config.nlq && config.nlq.provider !== 'builtin') {
-            const schemaContext = this._buildSchemaContext(schema);
-            return await this._callExternalLLM(question, schemaContext, dbType);
+            return await this._llmPipeline(question, schema, dbType, connectionId);
         }
 
-        // Build schema intelligence
+        // Builtin heuristic (instant, no API needed)
         const si = new SchemaIntelligence(schema, dbType);
-
-        // Build query plan
         const planner = new QueryPlanner(question, si, dbType);
         const plan = planner.buildPlan();
-
         return { sql: plan.sql || '', explanation: plan.explanation || '', chartType: plan.chartType || 'table', confidence: plan.confidence || 0.5, followUps: plan.followUps || [] };
     }
 
-    async _callExternalLLM(question, schemaContext, dbType) {
-        const provider = config.nlq?.provider || 'builtin';
-        if (provider === 'bedrock') return await this._callBedrock(question, schemaContext, dbType);
-        if (provider === 'openai') return await this._callOpenAI(question, schemaContext, dbType);
-        return { sql: '', explanation: 'No LLM configured', chartType: 'table' };
+    /**
+     * Full LLM pipeline: DDL + Question Masking + Vector Retrieval + Few-Shot + Generation
+     */
+    async _llmPipeline(question, schema, dbType, connectionId) {
+        // Step 1: Build DDL context
+        const ddl = this._buildDDL(schema, dbType);
+
+        // Step 2: Retrieve similar Q&A pairs from vector store
+        const similarPairs = vectorStore.findSimilar(question, connectionId, 3);
+        const fewShotContext = similarPairs.length > 0
+            ? '\n\nSIMILAR QUESTIONS AND ANSWERS:\n' + similarPairs.map((p, i) => `${i + 1}. Q: "${p.question}"\n   SQL: ${p.sql}`).join('\n')
+            : '';
+
+        // Step 3: Build comprehensive prompt
+        const prompt = this._buildLLMPrompt(question, ddl, fewShotContext, dbType);
+
+        // Step 4: Call LLM
+        const provider = config.nlq?.provider;
+        let result;
+        if (provider === 'bedrock') result = await this._callBedrock(prompt);
+        else if (provider === 'openai') result = await this._callOpenAI(prompt);
+        else return { sql: '', explanation: 'Unknown LLM provider', chartType: 'table' };
+
+        return result;
     }
 
-    async _callBedrock(question, schemaContext, dbType) {
+    /**
+     * Build DDL (Data Definition Language) context from schema.
+     * This gives the LLM full awareness of tables, columns, types, and keys.
+     */
+    _buildDDL(schema, dbType) {
+        if (!schema?.tables) return '-- No schema available';
+        let ddl = `-- Database: ${dbType}\n`;
+        for (const [tableName, tableInfo] of Object.entries(schema.tables)) {
+            const cols = (tableInfo.columns || []).map(col => {
+                const name = col.name || col;
+                const type = col.type || 'TEXT';
+                const key = col.key === 'PK' ? ' PRIMARY KEY' : (col.key === 'FK' ? ' REFERENCES ...' : '');
+                const nullable = col.nullable === false ? ' NOT NULL' : '';
+                return `  ${name} ${type}${key}${nullable}`;
+            });
+            ddl += `\nCREATE TABLE ${tableName} (\n${cols.join(',\n')}\n);\n`;
+        }
+        return ddl;
+    }
+
+    /**
+     * Build comprehensive LLM prompt with DDL, few-shot examples, and rules.
+     */
+    _buildLLMPrompt(question, ddl, fewShotContext, dbType) {
+        return `You are an expert ${dbType} SQL assistant. Generate a single SELECT query to answer the user's question.
+
+DATABASE SCHEMA (DDL):
+${ddl}
+${fewShotContext}
+
+RULES:
+- Use ONLY tables and columns defined in the schema above.
+- Generate ONLY a single SELECT statement.
+- Always add LIMIT (max 1000) unless counting/aggregating.
+- For single numeric results (COUNT, SUM, AVG, etc.), use chartType "number".
+- For time-series data grouped by date/month, use chartType "bar" or "line".
+- For category breakdowns, use chartType "pie" (max 7 categories) or "bar".
+- For record listings, use chartType "table".
+- Never include passwords, tokens, or sensitive columns in SELECT.
+- Respond ONLY in this JSON format (no extra text):
+
+{"sql": "SELECT ...", "explanation": "Brief business-friendly explanation", "chartType": "table|bar|line|pie|number"}
+
+USER QUESTION: "${question}"`;
+    }
+
+    async _callBedrock(prompt) {
         try {
             const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
             const client = new BedrockRuntimeClient({ region: config.nlq?.region || 'us-east-1' });
-            const prompt = this._buildPrompt(question, schemaContext, dbType);
             const command = new InvokeModelCommand({ modelId: config.nlq?.model || 'anthropic.claude-3-haiku-20240307-v1:0', contentType: 'application/json', accept: 'application/json', body: JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
             const response = await client.send(command);
             return this._parseAIResponse(JSON.parse(new TextDecoder().decode(response.body)).content?.[0]?.text || '');
-        } catch (err) { console.error('[NLQ] Bedrock error:', err.message); return { sql: '', explanation: 'LLM unavailable', chartType: 'table' }; }
+        } catch (err) { console.error('[NLQ] Bedrock error:', err.message); return { sql: '', explanation: 'LLM error: ' + err.message, chartType: 'table' }; }
     }
 
-    async _callOpenAI(question, schemaContext, dbType) {
+    async _callOpenAI(prompt) {
         try {
-            const prompt = this._buildPrompt(question, schemaContext, dbType);
-            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` }, body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'system', content: 'You are a SQL expert. Respond in JSON: {"sql":"...","explanation":"...","chartType":"table|bar|line|pie|number"}' }, { role: 'user', content: prompt }], temperature: 0.1 }) });
-            return this._parseAIResponse((await response.json()).choices?.[0]?.message?.content || '');
-        } catch (err) { console.error('[NLQ] OpenAI error:', err.message); return { sql: '', explanation: 'LLM unavailable', chartType: 'table' }; }
-    }
-
-    _buildPrompt(question, schemaContext, dbType) {
-        return `You are a Text-to-SQL assistant for a ${dbType} database.\n\nDATABASE SCHEMA:\n${schemaContext}\n\nUSER QUESTION: "${question}"\n\nGenerate SQL. Respond in JSON: {"sql":"SELECT ...","explanation":"...","chartType":"table|bar|line|pie|number"}\nRules: Use only schema columns. LIMIT 1000 max. Single value = "number". Time-series = "line" or "bar". Categories = "pie".`;
+            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` }, body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1024 }) });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message || 'API error');
+            return this._parseAIResponse(data.choices?.[0]?.message?.content || '');
+        } catch (err) { console.error('[NLQ] OpenAI error:', err.message); return { sql: '', explanation: 'LLM error: ' + err.message, chartType: 'table' }; }
     }
 
     _parseAIResponse(text) {
-        try { return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()); }
-        catch (e) { const m = text.match(/SELECT[\s\S]*?(?:;|$)/i); return { sql: m ? m[0].replace(/;$/, '') : '', explanation: text.substring(0, 200), chartType: 'table' }; }
+        try {
+            const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(clean);
+            return { sql: parsed.sql || '', explanation: parsed.explanation || '', chartType: parsed.chartType || 'table', confidence: 0.95 };
+        } catch (e) {
+            const m = text.match(/SELECT[\s\S]*?(?:;|$)/i);
+            return { sql: m ? m[0].replace(/;$/, '') : '', explanation: text.substring(0, 200), chartType: 'table', confidence: 0.6 };
+        }
     }
 
     _buildSchemaContext(schema) {
@@ -744,9 +809,9 @@ async function processQuestion(userId, connectionId, question) {
 
     // 3. Generate SQL via engine
     const engine = new NLQEngine();
-    const generated = await engine.generateSQL({ question, schema, dbType: conn.db_type, userId });
+    let generated = await engine.generateSQL({ question, schema, dbType: conn.db_type, userId, connectionId });
 
-    // Handle greeting (no SQL needed)
+    // Handle greeting / blocked (no SQL needed)
     if (!generated.sql) {
         cleanup();
         return { success: true, question, sql: '', explanation: generated.explanation, chartType: 'table', columns: [], data: [], rowCount: 0, duration: 0, confidence: generated.confidence || 1.0, followUps: generated.followUps || [] };
@@ -759,16 +824,58 @@ async function processQuestion(userId, connectionId, question) {
         return { success: false, question, sql: generated.sql, explanation: validation.reason, chartType: 'table', error: validation.reason, data: null, confidence: 0 };
     }
 
-    // 5. Execute
-    let results;
-    try { results = await adapter.query(generated.sql); }
-    catch (err) {
-        cleanup();
-        return { success: false, question, sql: generated.sql, explanation: generated.explanation, chartType: generated.chartType, error: err.message, data: null, confidence: generated.confidence || 0 };
+    // 5. Execute with self-correction loop (max 2 retries)
+    const MAX_RETRIES = 2;
+    let lastError = null;
+    let results = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            results = await adapter.query(generated.sql);
+            lastError = null;
+            break; // Success
+        } catch (err) {
+            lastError = err;
+            console.error(`[NLQ] Query attempt ${attempt + 1} failed:`, err.message);
+
+            // Self-correction: if LLM is configured, retry with error context
+            if (attempt < MAX_RETRIES && config.nlq && config.nlq.provider !== 'builtin') {
+                console.log('[NLQ] Attempting self-correction with error context...');
+                const correctionPrompt = `The previous SQL query failed with this error:\n\nSQL: ${generated.sql}\nError: ${err.message}\n\nPlease fix the query. Remember the database is ${conn.db_type}.\nSchema:\n${engine._buildDDL ? engine._buildDDL(schema, conn.db_type) : engine._buildSchemaContext(schema)}\n\nGenerate a corrected query. Respond in JSON: {"sql":"SELECT ...","explanation":"...","chartType":"table|bar|line|pie|number"}`;
+
+                try {
+                    const provider = config.nlq.provider;
+                    if (provider === 'bedrock') generated = await engine._callBedrock(correctionPrompt);
+                    else if (provider === 'openai') generated = await engine._callOpenAI(correctionPrompt);
+
+                    // Validate corrected SQL
+                    const reValidation = validateSQL(generated.sql);
+                    if (!reValidation.valid) break;
+                } catch (llmErr) {
+                    console.error('[NLQ] Self-correction LLM failed:', llmErr.message);
+                    break;
+                }
+            } else {
+                break; // No LLM available for self-correction, or max retries hit
+            }
+        }
     }
+
+    if (lastError) {
+        cleanup();
+        return { success: false, question, sql: generated.sql, explanation: generated.explanation, chartType: generated.chartType, error: lastError.message, data: null, confidence: generated.confidence || 0 };
+    }
+
     cleanup();
 
-    // 6. Result intelligence
+    // 6. Store successful Q&A pair for future retrieval
+    if (results && results.data && results.data.length > 0) {
+        try {
+            vectorStore.add({ question, sql: generated.sql, connectionId, dbType: conn.db_type, tables: Object.keys(schema.tables || {}) });
+        } catch (e) { /* non-critical */ }
+    }
+
+    // 7. Result intelligence
     const analysis = analyzeResults(results, generated);
 
     return {
