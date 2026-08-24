@@ -404,18 +404,12 @@ class QueryPlanner {
 
     _detectFilters(tableInfo) {
         const conditions = [];
-        // Status filter
+        // Status filter - only common status words (not entity nouns like "admin")
         const catCol = tableInfo?.categoryColumns?.[0];
         if (catCol) {
             for (const [status, pattern] of Object.entries(STATUS_PATTERNS)) {
                 if (pattern.test(this.q)) { conditions.push(`${catCol} = '${status}'`); break; }
             }
-        }
-        // Role/type filter
-        const roleMatch = this.q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|manager|staff|operator|premium|free|basic|pro)\b/i);
-        if (roleMatch && catCol) {
-            const existing = conditions.find(c => c.includes(catCol));
-            if (!existing) conditions.push(`${catCol} = '${roleMatch[1]}'`);
         }
         return conditions;
     }
