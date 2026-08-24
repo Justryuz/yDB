@@ -7,8 +7,9 @@ A production-grade, open-source database management platform with cross-database
 ## Features
 
 - **Cross-Database Joins** — Join tables from MySQL + PostgreSQL + MongoDB in one query via DuckDB engine (9ms for 2-way, 13ms for 3-way joins)
-- **12 Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL
-- **Copilot (Text-to-SQL)** — Ask business questions in plain language (BM/EN), get SQL + results + charts instantly
+- **12+ Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL, REST API
+- **Copilot (Text-to-SQL)** — Ask business questions in plain English, get SQL + results + charts instantly. Hybrid AI with self-correction and learning
+- **REST API Connections** — Connect to any HTTP API with bearer token, auto-discover schema from JSON responses
 - **Visual Query Builder** — Drag-drop tables, auto-detect joins, generate SQL
 - **Built-in API Client** — Postman-like HTTP client with collections and auth
 - **Server-Side Security** — JWT auth, RBAC, AES-256 encrypted credentials, immutable audit log, per-user rate limiting
@@ -118,25 +119,53 @@ yDB is hardened for production deployment. See [SECURITY.md](SECURITY.md) for fu
 - For unsupported backends: connection is destroyed to abort the query
 - Cancelled queries are logged to the audit trail with status `cancelled`
 
-## Copilot — Text-to-SQL (NLQ)
+## Copilot — Text-to-SQL (NLQ Engine v3)
 
 Natural language interface for business users who don't know SQL:
 
 ```
 User: "How many users registered this month?"
-  -> AI generates SQL:
-  SELECT COUNT(*) AS total FROM users
-  WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+  -> Schema Intelligence analyzes database structure
+  -> Query Planner builds execution plan
+  -> SQL Generated: SELECT COUNT(*) AS total FROM users WHERE created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
   -> Executes against connected database
   -> Returns: 33 (displayed as number card)
+  -> Stores Q&A pair for future learning
 ```
 
-- Ask questions in plain English — get SQL + results + charts
+### Architecture
+
+```
+Question -> Intent Detection -> Schema Intelligence -> Query Plan -> SQL -> Validate -> Execute -> Insights
+                                                                              |
+                                                                    Self-correction (retry with error context, max 2)
+                                                                              |
+                                                              Vector Store (learns from successful queries)
+```
+
+### Two Modes
+
+| Mode | When | Speed | Accuracy |
+|---|---|---|---|
+| **Builtin Heuristic** (default) | `NLQ_PROVIDER=builtin` or unset | ~50ms | Good for common patterns |
+| **LLM Pipeline** | `NLQ_PROVIDER=openai` or `bedrock` | 1-3s | Excellent, handles complex queries |
+
+### LLM Pipeline Features (when configured)
+
+- **DDL Context**: Full CREATE TABLE statements sent to LLM for accurate SQL
+- **Vector Store Retrieval**: Finds 3 most similar past Q&A pairs as few-shot examples
+- **Self-Correction**: If SQL fails, auto-retries with error message context (max 2 attempts)
+- **Learning**: Successful queries stored in `nlq-training.json` for future reference
+- **Sensitive Data Protection**: Blocks password/token queries, excludes sensitive columns
+
+### Core Features
+
 - Schema-aware: reads connected database to generate accurate queries
 - Smart chart selection: number, bar, line, pie, or table
-- Dynamic suggestions generated from your actual database schema
-- Pluggable AI backend: built-in heuristic, Amazon Bedrock (Claude), or OpenAI
-- No SQL knowledge needed — business users can self-serve analytics
+- Dynamic suggestions generated from actual database schema (only tables with data)
+- Confidence scoring on every query
+- Follow-up question suggestions
+- Security: blocks destructive SQL, sensitive data queries
 
 ### Supported Question Patterns
 
@@ -147,26 +176,30 @@ User: "How many users registered this month?"
 | Trend | "Monthly transaction trend" | Bar/line chart |
 | Breakdown | "Breakdown by status" | Pie chart |
 | Top-N | "Top 10 merchants by amount" | Bar chart |
+| Bottom-N | "Bottom 5 by balance" | Bar chart |
 | Recent | "Latest 20 transactions" | Table |
 | Search | "Find user john" | Table |
+| Average | "Average order value" | Number |
 | Time filter | "Orders last 30 days" | Filtered results |
 | Status filter | "Show pending payments" | Filtered results |
+| Comparison | "Compare by category" | Bar chart |
 
 ### AI Provider Configuration
 
 ```env
-# Built-in heuristic (default, no API key needed)
+# Built-in heuristic (default, no API key needed, instant)
 NLQ_PROVIDER=builtin
 
-# Amazon Bedrock (Claude)
+# Amazon Bedrock (Claude) — full LLM pipeline with self-correction
 NLQ_PROVIDER=bedrock
 NLQ_MODEL=anthropic.claude-3-haiku-20240307-v1:0
 NLQ_REGION=us-east-1
 
-# OpenAI compatible
+# OpenAI compatible — full LLM pipeline with self-correction
 NLQ_PROVIDER=openai
 NLQ_API_KEY=sk-...
 NLQ_MODEL=gpt-4o-mini
+NLQ_BASE_URL=https://api.openai.com/v1
 ```
 
 ## Tech Stack
@@ -200,6 +233,7 @@ NLQ_MODEL=gpt-4o-mini
 | AWS Redshift | `pg` | PostgreSQL wire-compatible |
 | Azure SQL / Synapse | `mssql` | Same as SQL Server |
 | Google Cloud SQL | `pg` / `mysql2` | PostgreSQL or MySQL compatible |
+| REST API | `curl` (HTTP) | Any HTTP API with bearer token, auto-schema discovery |
 
 ## API Reference
 
