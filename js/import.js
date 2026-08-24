@@ -21,7 +21,24 @@ YDB.Import = {
 
     populateConnections: function () {
         var sel = document.getElementById('import-target-conn');
-        sel.innerHTML = YDB.State.connections.map(function (c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+        
+        function render(conns) {
+            sel.innerHTML = '<option value="">Select connection...</option>' + conns.map(function (c) {
+                var name = c.name + ' (' + (c.type || c.db_type || '') + ')';
+                return '<option value="' + c.id + '">' + name + '</option>';
+            }).join('');
+        }
+
+        if (YDB.State.connections && YDB.State.connections.length > 0) {
+            render(YDB.State.connections);
+        } else if (YDB.API.isOnline() && YDB.API.token) {
+            YDB.API.get('/connections').then(function (conns) {
+                YDB.State.connections = conns.map(function (c) {
+                    return { id: c.id, name: c.name, type: c.db_type, host: c.host, port: c.port, username: c.username, database: c.database_name };
+                });
+                render(YDB.State.connections);
+            }).catch(function () {});
+        }
     },
 
     _handleFile: function (file) {
