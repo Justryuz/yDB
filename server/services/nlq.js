@@ -579,7 +579,7 @@ async function processQuestion(userId, connectionId, question) {
     try { password = conn.password_encrypted ? decrypt(conn.password_encrypted) : ''; } catch (e) { throw new Error('Failed to decrypt credentials'); }
 
     const { opts, cleanup } = await withTunnel(
-        { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
+        { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: ((conn.options || {}).endpoints || []), options: conn.options || {} },
         (conn.options || {}).ssh
     );
 

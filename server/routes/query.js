@@ -64,7 +64,7 @@ router.post('/execute', async (req, res) => {
         }
 
         const { opts, cleanup } = await withTunnel(
-            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
             options.ssh
         );
 

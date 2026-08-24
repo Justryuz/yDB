@@ -94,7 +94,7 @@ router.get('/:connectionId/tables/:tableName/data', async (req, res) => {
 
         const sql = `SELECT * FROM ${tableName} LIMIT ${perPage} OFFSET ${offset}`;
         const result = await client.execute(
-            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name },
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: ((conn.options || {}).endpoints || []), options: conn.options || {} },
             sql
         );
 
