@@ -307,6 +307,7 @@ class QueryPlanner {
     buildPlan() {
         const intent = this._detectIntent();
         if (intent === 'greeting') return { intent: 'greeting', confidence: 1.0, sql: '', explanation: 'Hello! I am your Copilot. Ask me a question about your data — for example: "How many users?", "Total revenue this month", "Top 10 products by sales", or "Monthly trend".' };
+        if (intent === 'blocked_sensitive') return { intent: 'blocked_sensitive', confidence: 1.0, sql: '', explanation: 'For security reasons, I cannot query or display sensitive data such as passwords, tokens, or credentials. Please ask a different business question.' };
 
         const tables = Object.keys(this.si.tables);
         if (tables.length === 0) return { intent: 'error', confidence: 0, sql: '', explanation: 'No tables found in the connected database.' };
@@ -342,6 +343,8 @@ class QueryPlanner {
 
     _detectIntent() {
         if (INTENT_PATTERNS.greeting.test(this.q) && this.q.split(/\s+/).length <= 4) return 'greeting';
+        // Block sensitive/password queries
+        if (/\b(password|credentials|secret|token|api.?key|private.?key)\b/i.test(this.q)) return 'blocked_sensitive';
         // Order matters — check specific before generic
         if (INTENT_PATTERNS.count.test(this.q)) return 'count';
         if (INTENT_PATTERNS.sum.test(this.q)) return 'sum';
