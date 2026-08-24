@@ -579,6 +579,35 @@ async function processQuestion(userId, connectionId, question) {
     const generated = await engine.generateSQL({ question, schema, dbType: conn.db_type, userId });
     if (!generated.sql) { cleanup(); throw new Error('Could not generate SQL. Try rephrasing.'); }
 
+    // Step 5: Safety Check — only allow SELECT queries (block destructive SQL)
+    const safetySql = generated.sql.trim().toUpperCase();
+    const dangerousPatterns = /^\s*(DROP|DELETE|TRUNCATE|ALTER|INSERT|UPDATE|GRANT|REVOKE|CREATE|EXEC|EXECUTE|CALL)\b/i;
+    if (dangerousPatterns.test(generated.sql.trim())) {
+        cleanup();
+        return {
+            success: false,
+            question,
+            sql: generated.sql,
+            explanation: 'This query was blocked for safety. The BI Copilot only executes read-only (SELECT) queries to protect your data.',
+            chartType: 'table',
+            error: 'Query blocked: Only SELECT statements are allowed. Destructive operations (DROP, DELETE, UPDATE, INSERT) are not permitted through the Copilot.',
+            data: null
+        };
+    }
+    // Also reject if it doesn't start with SELECT/WITH/SHOW/DESCRIBE/EXPLAIN
+    if (!/^\s*(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN)\b/i.test(generated.sql.trim())) {
+        cleanup();
+        return {
+            success: false,
+            question,
+            sql: generated.sql,
+            explanation: 'Only read-only queries are permitted through the BI Copilot.',
+            chartType: 'table',
+            error: 'Query blocked: Must be a SELECT/SHOW/DESCRIBE statement.',
+            data: null
+        };
+    }
+
     let results;
     try { results = await adapter.query(generated.sql); } catch (err) {
         cleanup();
