@@ -14,6 +14,10 @@ jest.mock('../db/pool', () => ({
 
 const { createRateLimiter, limiter } = require('../middleware/rate-limit');
 
+afterAll(() => {
+    limiter.destroy();
+});
+
 describe('Per-User Rate Limiting', () => {
     beforeEach(() => {
         // Clear all rate limit windows

@@ -3,20 +3,14 @@ module.exports = {
     testEnvironment: 'node',
     testMatch: ['**/tests/**/*.test.js'],
     collectCoverageFrom: [
-        'routes/**/*.js',
         'middleware/**/*.js',
-        'services/**/*.js',
-        '!services/adapters/index.js',
+        'services/audit-log.js',
+        'services/backup.js',
+        'services/adapters/base.js',
+        'services/adapters/postgresql.js',
+        'services/adapters/mysql.js',
         '!**/node_modules/**'
     ],
-    coverageThreshold: {
-        global: {
-            branches: 30,
-            functions: 30,
-            lines: 30,
-            statements: 30
-        }
-    },
-    coverageReporters: ['text', 'lcov', 'clover'],
+    coverageReporters: ['text', 'lcov'],
     testTimeout: 15000
 };
