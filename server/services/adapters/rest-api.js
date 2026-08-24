@@ -32,11 +32,11 @@ class RestAPIAdapter extends BaseAdapter {
      * Falls back to native fetch if curl unavailable.
      * @private
      */
-    _curlRequest(url) {
+    _curlRequest(url, retries = 2) {
         return new Promise((resolve, reject) => {
             const { spawn } = require('child_process');
             const headers = this._getHeaders();
-            const args = ['-sk', '--max-time', '20', '--tls-max', '1.2'];
+            const args = ['-sk', '--max-time', '20', '--tls-max', '1.2', '--retry', '2', '--retry-delay', '1'];
             for (const [key, val] of Object.entries(headers)) {
                 args.push('-H', `${key}: ${val}`);
             }
