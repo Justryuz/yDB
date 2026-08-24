@@ -14,6 +14,9 @@ YDB.Connections = {
         document.getElementById('conn-type').addEventListener('change', function () {
             var port = YDB.Config.PORTS[this.value];
             if (port) document.getElementById('conn-port').value = port;
+            // Show/hide API endpoint fields
+            var apiFields = document.getElementById('api-endpoint-fields');
+            if (apiFields) apiFields.classList.toggle('hidden', this.value !== 'restapi');
         });
 
         // SSH tunnel toggle
@@ -138,6 +141,17 @@ YDB.Connections = {
                 password: document.getElementById('conn-ssh-pass').value,
                 privateKey: document.getElementById('conn-ssh-key').value
             };
+        }
+
+        // REST API endpoints
+        if (data.db_type === 'restapi') {
+            var endpointsText = document.getElementById('conn-api-endpoints').value.trim();
+            if (endpointsText) {
+                data.options.endpoints = endpointsText.split('\n')
+                    .map(function (line) { return line.trim(); })
+                    .filter(function (line) { return line.length > 0; })
+                    .map(function (path) { return { path: path.startsWith('/') ? path : '/' + path, name: path.replace(/^\//, '').replace(/\//g, '_') }; });
+            }
         }
 
         var done = function () {

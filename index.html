@@ -808,6 +808,9 @@
                                 <option value="influxdb">InfluxDB</option>
                                 <option value="neo4j">Neo4j</option>
                             </optgroup>
+                            <optgroup label="REST API">
+                                <option value="restapi">REST API (Bearer Token)</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="form-control">
@@ -831,6 +834,22 @@
                         <input type="text" id="conn-db" class="input input-bordered" placeholder="mydb">
                     </div>
                 </div>
+                <!-- REST API Endpoints (shown when REST API type selected) -->
+                <div id="api-endpoint-fields" class="hidden">
+                    <div class="divider text-xs">API Configuration</div>
+                    <div class="bg-base-200 rounded p-3 text-xs mb-3">
+                        <p class="font-semibold mb-1">Connection Guide:</p>
+                        <p><b>Host</b> = API base URL (e.g. api.example.com)</p>
+                        <p><b>Password</b> = Bearer Token</p>
+                        <p><b>Database Name</b> = Base path (e.g. /api/v1)</p>
+                        <p><b>Username</b> = API Key (optional, sent as X-API-Key header)</p>
+                    </div>
+                    <div class="form-control mb-3">
+                        <label class="label"><span class="label-text">API Endpoints (one per line, e.g. /users, /orders)</span></label>
+                        <textarea id="conn-api-endpoints" class="textarea textarea-bordered text-xs font-mono h-20" placeholder="/users&#10;/products&#10;/orders&#10;/transactions"></textarea>
+                    </div>
+                </div>
+
                 <!-- SSH Tunnel -->
                 <div class="divider text-xs">SSH Tunnel (Optional)</div>
                 <div class="form-control mb-3">

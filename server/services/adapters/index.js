@@ -12,6 +12,7 @@ const Neo4jAdapter = require('./neo4j');
 const SQLiteAdapter = require('./sqlite');
 const DynamoDBAdapter = require('./dynamodb');
 const ClickHouseAdapter = require('./clickhouse');
+const RestAPIAdapter = require('./rest-api');
 
 const adapterMap = {
     postgresql: PostgreSQLAdapter,
@@ -19,14 +20,16 @@ const adapterMap = {
     mariadb: MySQLAdapter,
     mongodb: MongoDBAdapter,
     mssql: MSSQLAdapter,
-    azuresql: MSSQLAdapter,      // Azure SQL uses same MSSQL driver
-    synapse: MSSQLAdapter,       // Azure Synapse uses same MSSQL driver
+    azuresql: MSSQLAdapter,
+    synapse: MSSQLAdapter,
     redis: RedisAdapter,
     neo4j: Neo4jAdapter,
     sqlite: SQLiteAdapter,
     dynamodb: DynamoDBAdapter,
-    redshift: PostgreSQLAdapter, // Redshift is PostgreSQL-compatible
-    clickhouse: ClickHouseAdapter
+    redshift: PostgreSQLAdapter,
+    clickhouse: ClickHouseAdapter,
+    restapi: RestAPIAdapter,
+    api: RestAPIAdapter
 };
 
 /**
