@@ -399,6 +399,8 @@ class NLQEngine {
 
     _findBestTable(q, tables, schema) {
         if (!tables.length) return 'data';
+        // If only one table exists, always use it (common for REST APIs)
+        if (tables.length === 1) return tables[0];
 
         // Direct name match (exact, singular, plural, underscore-to-space)
         for (const t of tables) {

@@ -200,13 +200,23 @@ class RestAPIAdapter extends BaseAdapter {
     }
 
     _buildUrl(endpoint, params) {
-        let url = this._getBaseUrl() + '/' + endpoint;
+        // Map endpoint name back to actual API path
+        const endpoints = this.opts.endpoints || this.opts.options?.endpoints || [];
+        let path = '/' + endpoint;
+
+        // Find matching endpoint config
+        const epConfig = endpoints.find(ep =>
+            (ep.name || '').toLowerCase() === endpoint.toLowerCase() ||
+            (ep.path || '').replace(/^\//, '').replace(/\//g, '_') === endpoint
+        );
+        if (epConfig) path = epConfig.path;
+
+        let url = this._getBaseUrl() + path;
         const queryParams = Object.entries(params)
             .filter(([k]) => k !== 'id')
             .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
             .join('&');
 
-        // If there's an id param, append to path
         if (params.id) url += '/' + params.id;
         if (queryParams) url += '?' + queryParams;
 
