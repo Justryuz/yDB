@@ -93,20 +93,30 @@ router.post('/execute', async (req, res) => {
 
         try {
             const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+            const isMySQL = conn.db_type === 'mysql' || conn.db_type === 'mariadb';
+            const q = isMySQL ? '`' : '"'; // Quote character
+
+            // Sanitize column names
+            const safeCols = columns.map(c => c.replace(/[^a-zA-Z0-9_]/g, '_'));
 
             // Create table
-            const colDefs = columns.map(c => `\`${c}\` TEXT`).join(', ');
-            await adapter.query(`CREATE TABLE IF NOT EXISTS \`${tableName}\` (${colDefs})`);
+            const colDefs = safeCols.map(c => `${q}${c}${q} TEXT`).join(', ');
+            await adapter.query(`CREATE TABLE IF NOT EXISTS ${q}${tableName}${q} (${colDefs})`);
 
             // Insert data in batches
             let imported = 0;
-            const batchSize = 50;
-            for (let i = 0; i < data.length; i += batchSize) {
-                const batch = data.slice(i, i + batchSize);
-                for (const row of batch) {
-                    const vals = columns.map(c => `'${String(row[c] || '').replace(/'/g, "''")}'`).join(', ');
-                    await adapter.query(`INSERT INTO \`${tableName}\` (${columns.map(c => '`' + c + '`').join(', ')}) VALUES (${vals})`);
+            for (const row of data) {
+                const vals = columns.map(c => {
+                    const v = row[c];
+                    if (v === null || v === undefined || v === '') return 'NULL';
+                    return `'${String(v).replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
+                }).join(', ');
+                try {
+                    await adapter.query(`INSERT INTO ${q}${tableName}${q} (${safeCols.map(c => q + c + q).join(', ')}) VALUES (${vals})`);
                     imported++;
+                } catch (insertErr) {
+                    // Skip failed rows, continue
+                    console.error('[Import] Row skip:', insertErr.message);
                 }
             }
 
