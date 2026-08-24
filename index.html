@@ -40,87 +40,16 @@
         </div>
     </section>
 
-    <!-- ===== SPLASH SCREEN (Matrix Digital Rain) ===== -->
-    <section id="page-splash" class="hidden fixed inset-0 z-50">
-        <canvas id="matrix-canvas" class="absolute inset-0 w-full h-full"></canvas>
-        <div class="absolute inset-0 flex items-center justify-center z-10">
-            <div class="text-center splash-content" style="opacity:0;animation:splashFadeIn 1s ease 0.5s forwards;">
-                <img src="assets/icon.svg" alt="yDB" class="w-32 h-32 object-contain mx-auto rounded-2xl shadow-2xl" style="filter:drop-shadow(0 0 20px rgba(99,102,241,0.5));">
-                <p class="text-white/70 text-sm mt-3 font-mono">Tame any database.</p>
-            </div>
+    <!-- ===== SPLASH SCREEN ===== -->
+    <section id="page-splash" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-base-300">
+        <div class="text-center splash-content" style="animation:splashFadeIn 0.8s ease forwards;">
+            <img src="assets/icon.svg" alt="yDB" class="w-32 h-32 object-contain mx-auto rounded-2xl shadow-2xl">
+            <p class="text-base-content/50 text-sm mt-3">Tame any database.</p>
         </div>
-        <script>
-        (function() {
-            var canvas = document.getElementById('matrix-canvas');
-            var ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            var chars = 'SELECT INSERT UPDATE DELETE FROM WHERE JOIN CREATE DROP TABLE INDEX DATABASE GRANT REVOKE 01アイウエオカキクケコ';
-            chars = chars.split('');
-            var fontSize = 14;
-            var columns = Math.floor(canvas.width / fontSize);
-            var drops = [];
-            for (var i = 0; i < columns; i++) drops[i] = Math.random() * -100;
-
-            function draw() {
-                ctx.fillStyle = 'rgba(15, 23, 42, 0.08)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = fontSize + 'px monospace';
-
-                for (var i = 0; i < drops.length; i++) {
-                    var char = chars[Math.floor(Math.random() * chars.length)];
-                    var x = i * fontSize;
-                    var y = drops[i] * fontSize;
-
-                    // Gradient color: cyan -> purple
-                    var hue = 180 + (i / columns) * 100;
-                    ctx.fillStyle = 'hsla(' + hue + ', 80%, 60%, 0.9)';
-                    ctx.fillText(char, x, y);
-
-                    // Dim trail
-                    if (y > 0) {
-                        ctx.fillStyle = 'hsla(' + hue + ', 60%, 40%, 0.3)';
-                        ctx.fillText(chars[Math.floor(Math.random() * chars.length)], x, y - fontSize);
-                    }
-
-                    if (y > canvas.height && Math.random() > 0.975) {
-                        drops[i] = 0;
-                    }
-                    drops[i]++;
-                }
-            }
-
-            // Fill initial black
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            var matrixInterval = setInterval(draw, 45);
-
-            // Stop animation when splash hides
-            var observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(m) {
-                    if (canvas.closest('#page-splash').classList.contains('hidden')) {
-                        clearInterval(matrixInterval);
-                        observer.disconnect();
-                    }
-                });
-            });
-            observer.observe(document.getElementById('page-splash'), { attributes: true, attributeFilter: ['class'] });
-        })();
-        </script>
         <style>
-            @keyframes splashFadeIn {
-                from { opacity: 0; transform: scale(0.8) translateY(20px); }
-                to { opacity: 1; transform: scale(1) translateY(0); }
-            }
-            #page-splash.fade-out {
-                animation: splashFadeOut 0.6s ease forwards;
-            }
-            @keyframes splashFadeOut {
-                from { opacity: 1; }
-                to { opacity: 0; }
-            }
+            @keyframes splashFadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+            #page-splash.fade-out { animation: splashFadeOut 0.5s ease forwards; }
+            @keyframes splashFadeOut { from { opacity: 1; } to { opacity: 0; } }
         </style>
     </section>
 
