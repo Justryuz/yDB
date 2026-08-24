@@ -42,9 +42,9 @@ jobs:
         working-directory: ./server
         env:
           JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
-          ENCRYPTION_KEY: 12345678901234567890123456789012
+          ENCRYPTION_KEY: "12345678901234567890123456789012"
           PG_HOST: localhost
-          PG_PORT: 5432
+          PG_PORT: "5432"
           PG_USER: ydb
           PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
@@ -55,25 +55,25 @@ jobs:
         working-directory: ./server
         env:
           PG_HOST: localhost
-          PG_PORT: 5432
+          PG_PORT: "5432"
           PG_USER: ydb
           PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
           JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
-          ENCRYPTION_KEY: 12345678901234567890123456789012
+          ENCRYPTION_KEY: "12345678901234567890123456789012"
         run: node db/init.js
 
       - name: Verify server starts
         working-directory: ./server
         env:
           PG_HOST: localhost
-          PG_PORT: 5432
+          PG_PORT: "5432"
           PG_USER: ydb
           PG_PASSWORD: ydb_ci_secret_password
           PG_DATABASE: ydb_app
           JWT_SECRET: ci-test-secret-that-is-at-least-32-characters
-          ENCRYPTION_KEY: 12345678901234567890123456789012
-          PORT: 3000
+          ENCRYPTION_KEY: "12345678901234567890123456789012"
+          PORT: "3000"
         run: |
           node server.js &
           sleep 3
