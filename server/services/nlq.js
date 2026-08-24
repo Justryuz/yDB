@@ -226,8 +226,20 @@ class NLQEngine {
         const result = { sql: '', explanation: '', chartType: 'table' };
         const isMySQL = dbType === 'mysql' || dbType === 'mariadb';
 
+        // -- HANDLE GREETINGS / NON-QUESTIONS --
+        if (/^\s*(hi|hello|hey|morning|good morning|good afternoon|assalamualaikum|salam)\b/i.test(q) && q.split(/\s+/).length <= 4) {
+            result.sql = '';
+            result.explanation = 'Hello! I am your BI Copilot. Ask me a business question about your data — for example: "How many users?", "Total sales this month", "Top 10 transactions", or "Monthly trend".';
+            result.chartType = 'table';
+            return result;
+        }
+
         const targetTable = this._findBestTable(q, tables, schema);
-        const cols = (schema.tables?.[targetTable]?.columns || []).map(c => c.name || c);
+        const allCols = (schema.tables?.[targetTable]?.columns || []).map(c => c.name || c);
+        // Filter out sensitive columns from display
+        const cols = allCols;
+        const safeCols = allCols.filter(c => !/password|hash|token|secret|key|salt/i.test(c));
+        const safeSelect = safeCols.length > 0 && safeCols.length < allCols.length ? safeCols.join(', ') : '*';
         const whereClause = this._buildWhereClause(q, cols, isMySQL);
 
         // ORDER MATTERS: check specific patterns BEFORE generic ones.
@@ -312,7 +324,7 @@ class NLQEngine {
                 result.explanation = `The highest ${this._humanize(amtCol)} value recorded in ${this._humanize(targetTable)}. This is your peak performance metric.`;
                 result.chartType = 'number';
             } else {
-                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
+                result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} ORDER BY id DESC LIMIT 1`;
                 result.explanation = `Showing the most recent record from ${this._humanize(targetTable)}.`;
             }
         }
@@ -324,7 +336,7 @@ class NLQEngine {
                 result.explanation = `The lowest ${this._humanize(amtCol)} value in ${this._humanize(targetTable)}. Review this to understand your baseline.`;
                 result.chartType = 'number';
             } else {
-                result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
+                result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} ORDER BY id ASC LIMIT 1`;
                 result.explanation = `Showing the earliest record from ${this._humanize(targetTable)}.`;
             }
         }
@@ -336,27 +348,27 @@ class NLQEngine {
                 const m = q.match(/\b(admin|editor|viewer|merchant|agent|seller|buyer|manager|staff|operator)\b/i);
                 if (m) filter = ` WHERE ${typeCol} = '${m[1]}'`;
             }
-            result.sql = `SELECT * FROM ${targetTable}${filter} ORDER BY id DESC LIMIT 25`;
+            result.sql = `SELECT ${safeSelect} FROM ${targetTable}${filter} ORDER BY id DESC LIMIT 25`;
             result.explanation = `Here are the matching records from ${this._humanize(targetTable)}.${filter ? ' Filtered to show only relevant entries based on your criteria.' : ''}`;
         }
         // -- RECENT / LATEST --
         else if (/\b(recent|latest|newest|last)\b/i.test(q) && !/\blast\s*(week|month|year|quarter|\d)/i.test(q)) {
             const dateCol = this._findCol(cols, /date|created|time|updated|registered|timestamp/i) || 'created_at';
             const n = Math.min(parseInt((q.match(/\d+/) || ['20'])[0]), 100);
-            result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY ${dateCol} DESC LIMIT ${n}`;
+            result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} ORDER BY ${dateCol} DESC LIMIT ${n}`;
             result.explanation = `The ${n} most recent entries in ${this._humanize(targetTable)}, sorted by newest first. This gives you a real-time snapshot of current activity.`;
         }
         // -- SEARCH / FIND --
         else if (/\b(find|search|look for|locate)\b/i.test(q)) {
             const term = q.replace(/\b(find|search|look\s*for|locate)\b/gi, '').trim();
             const searchCol = this._findCol(cols, /name|title|email|phone|username|description|label/i) || cols[0];
-            result.sql = `SELECT * FROM ${targetTable} WHERE ${searchCol} LIKE '%${term.replace(/'/g, "''")}%' LIMIT 25`;
+            result.sql = `SELECT ${safeSelect} FROM ${targetTable} WHERE ${searchCol} LIKE '%${term.replace(/'/g, "''")}%' LIMIT 25`;
             result.explanation = `Search results for "${term}" in ${this._humanize(targetTable)}. Matching against the ${this._humanize(searchCol)} field.`;
         }
         // -- LIST / SHOW --
         else if (/\b(list|show|display|all|view)\b/i.test(q)) {
             const n = Math.min(parseInt((q.match(/\d+/) || ['50'])[0]), 100);
-            result.sql = `SELECT * FROM ${targetTable}${whereClause} LIMIT ${n}`;
+            result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} LIMIT ${n}`;
             result.explanation = `Displaying ${n} records from ${this._humanize(targetTable)}.${whereClause ? ' Filtered by your specified criteria.' : ' Showing all available data.'}`;
         }
         // -- COMPARE --
@@ -366,15 +378,15 @@ class NLQEngine {
             result.explanation = `Comparative analysis of ${this._humanize(targetTable)} grouped by ${this._humanize(groupCol)}. Use this to identify relative strengths across categories.`;
             result.chartType = 'bar';
         }
-        // -- GENERIC "how much" / "how many" fallback --
-        else if (/\bhow (much|many)\b/i.test(q)) {
+        // -- GENERIC "how much" / "how many" / "total X" fallback --
+        else if (/\b(how (much|many)|total)\b/i.test(q)) {
             result.sql = `SELECT COUNT(*) AS total FROM ${targetTable}${whereClause}`;
-            result.explanation = `Total count of records in ${this._humanize(targetTable)}.`;
+            result.explanation = `Here's the total number of records in your ${this._humanize(targetTable)} data.`;
             result.chartType = 'number';
         }
         // -- DEFAULT --
         else {
-            result.sql = `SELECT * FROM ${targetTable}${whereClause} ORDER BY 1 DESC LIMIT 25`;
+            result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} ORDER BY 1 DESC LIMIT 25`;
             result.explanation = `Here's a sample of data from ${this._humanize(targetTable)}. Try asking more specific questions like "how many", "total amount", "monthly trend", or "breakdown by status" for deeper insights.`;
         }
 
@@ -577,7 +589,15 @@ async function processQuestion(userId, connectionId, question) {
 
     const engine = new NLQEngine();
     const generated = await engine.generateSQL({ question, schema, dbType: conn.db_type, userId });
-    if (!generated.sql) { cleanup(); throw new Error('Could not generate SQL. Try rephrasing.'); }
+
+    // If no SQL generated (e.g. greeting), return explanation only
+    if (!generated.sql) {
+        cleanup();
+        if (generated.explanation) {
+            return { success: true, question, sql: '', explanation: generated.explanation, chartType: 'table', columns: [], data: [], rowCount: 0, duration: 0 };
+        }
+        throw new Error('Could not generate SQL. Try rephrasing your question.');
+    }
 
     // Step 5: Safety Check — only allow SELECT queries (block destructive SQL)
     const safetySql = generated.sql.trim().toUpperCase();
