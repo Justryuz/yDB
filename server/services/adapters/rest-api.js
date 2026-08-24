@@ -14,30 +14,50 @@ const BaseAdapter = require('./base');
 
 class RestAPIAdapter extends BaseAdapter {
     async connect() {
-        // Validate we can reach the API using the first configured endpoint or base URL
         const baseUrl = this._getBaseUrl();
         const endpoints = this.opts.endpoints || this.opts.options?.endpoints || [];
         const testUrl = endpoints.length > 0 ? baseUrl + (endpoints[0].path || '') : baseUrl;
 
-        // Disable SSL rejection for APIs with self-signed certs
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
         try {
-            const response = await fetch(testUrl, {
-                method: 'GET',
-                headers: this._getHeaders(),
-                signal: AbortSignal.timeout(15000)
-            });
-            // Any HTTP response means API is reachable
+            const data = await this._curlRequest(testUrl);
             this.connected = true;
         } catch (err) {
-            if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-                throw new Error('API connection timeout (15s)');
-            }
             throw new Error(`Cannot reach API at ${testUrl}: ${err.message}`);
-        } finally {
-            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
         }
+    }
+
+    /**
+     * Make HTTP request using curl (bypasses Node.js TLS issues with some servers).
+     * Falls back to native fetch if curl unavailable.
+     * @private
+     */
+    _curlRequest(url) {
+        return new Promise((resolve, reject) => {
+            const { execFile } = require('child_process');
+            const headers = this._getHeaders();
+            const args = ['-sk', '--max-time', '15', '-H', 'Accept: application/json'];
+            for (const [key, val] of Object.entries(headers)) {
+                if (key !== 'Accept') args.push('-H', `${key}: ${val}`);
+            }
+            args.push(url);
+
+            execFile('curl', args, { maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
+                if (err) {
+                    // Fallback to native fetch
+                    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+                    fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(15000) })
+                        .then(r => r.text())
+                        .then(text => { process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'; resolve(text); })
+                        .catch(e => { process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'; reject(e); });
+                    return;
+                }
+                try {
+                    resolve(stdout);
+                } catch (e) {
+                    reject(new Error('Invalid response'));
+                }
+            });
+        });
     }
 
     /**
@@ -51,22 +71,12 @@ class RestAPIAdapter extends BaseAdapter {
         if (!this.connected) await this.connect();
         const start = Date.now();
 
-        // Parse the SQL-like query into an API call
         const parsed = this._parseSql(sql);
         const url = this._buildUrl(parsed.endpoint, parsed.params);
 
         try {
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: this._getHeaders(),
-                signal: AbortSignal.timeout(30000)
-            });
-
-            if (!response.ok) {
-                throw new Error(`API ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
+            const raw = await this._curlRequest(url);
+            const data = JSON.parse(raw);
             const rows = this._extractRows(data);
             const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
@@ -90,63 +100,49 @@ class RestAPIAdapter extends BaseAdapter {
         const schema = { tables: {} };
         const endpoints = this.opts.endpoints || this.opts.options?.endpoints || [];
 
-        // If endpoints configured, use them
         if (endpoints.length > 0) {
             for (const ep of endpoints) {
                 const name = ep.name || ep.path?.replace(/^\//, '').replace(/\//g, '_') || 'data';
                 try {
                     const url = this._getBaseUrl() + (ep.path || '/' + name);
-                    const response = await fetch(url + '?limit=1&per_page=1&page_size=1', {
-                        method: 'GET',
-                        headers: this._getHeaders(),
-                        signal: AbortSignal.timeout(10000)
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const rows = this._extractRows(data);
-                        if (rows.length > 0) {
-                            schema.tables[name] = {
-                                columns: Object.keys(rows[0]).map(k => ({
-                                    name: k,
-                                    type: this._inferType(rows[0][k]),
-                                    nullable: true,
-                                    key: k === 'id' ? 'PK' : ''
-                                }))
-                            };
-                        }
+                    const raw = await this._curlRequest(url);
+                    const data = JSON.parse(raw);
+                    const rows = this._extractRows(data);
+                    if (rows.length > 0) {
+                        schema.tables[name] = {
+                            columns: Object.keys(rows[0]).map(k => ({
+                                name: k,
+                                type: this._inferType(rows[0][k]),
+                                nullable: true,
+                                key: k === 'id' ? 'PK' : ''
+                            }))
+                        };
                     }
                 } catch (e) { /* skip failed endpoints */ }
             }
         } else {
-            // Try common REST endpoints for auto-discovery
+            // Try common endpoints
             const commonEndpoints = ['users', 'products', 'orders', 'transactions', 'items', 'posts', 'data'];
             for (const ep of commonEndpoints) {
                 try {
-                    const url = this._getBaseUrl() + '/' + ep + '?limit=1&per_page=1';
-                    const response = await fetch(url, {
-                        method: 'GET',
-                        headers: this._getHeaders(),
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const rows = this._extractRows(data);
-                        if (rows.length > 0) {
-                            schema.tables[ep] = {
-                                columns: Object.keys(rows[0]).map(k => ({
-                                    name: k,
-                                    type: this._inferType(rows[0][k]),
-                                    nullable: true,
-                                    key: k === 'id' ? 'PK' : ''
-                                }))
-                            };
-                        }
+                    const url = this._getBaseUrl() + '/' + ep;
+                    const raw = await this._curlRequest(url);
+                    const data = JSON.parse(raw);
+                    const rows = this._extractRows(data);
+                    if (rows.length > 0) {
+                        schema.tables[ep] = {
+                            columns: Object.keys(rows[0]).map(k => ({
+                                name: k,
+                                type: this._inferType(rows[0][k]),
+                                nullable: true,
+                                key: k === 'id' ? 'PK' : ''
+                            }))
+                        };
                     }
                 } catch (e) { /* skip */ }
             }
         }
 
-        // If no tables discovered, add a placeholder
         if (Object.keys(schema.tables).length === 0) {
             schema.tables['api'] = { columns: [{ name: 'response', type: 'JSON', nullable: true, key: '' }] };
         }
