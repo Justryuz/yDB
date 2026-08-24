@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./server
-        run: npm ci --ignore-scripts 2>&1 | tail -5
+        run: npm ci
 
       - name: Run unit tests
         working-directory: ./server
