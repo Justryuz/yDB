@@ -118,7 +118,7 @@ const STATUS_PATTERNS = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TABLE_KEYWORD_MAP = {
-    'user|customer|client|member|subscriber|account|registration|signup|profile|admin': /user|member|customer|client|account|subscriber|registration|profile|admin/i,
+    'user|customer|client|member|subscriber|registration|signup|profile|admin': /user|member|customer|client|subscriber|registration|profile|admin/i,
     'merchant|seller|vendor|shop|store|business|supplier|partner|retailer|outlet': /merchant|vendor|seller|shop|store|business|supplier|partner|retailer|outlet/i,
     'transaction|payment|sale|order|purchase|checkout|billing|invoice|receipt': /transaction|payment|order|sale|purchase|invoice|billing|checkout|receipt/i,
     'product|item|catalog|inventory|stock|sku|goods|merchandise|listing': /product|item|catalog|inventory|stock|sku|goods|merchandise|listing/i,
@@ -350,8 +350,8 @@ class QueryPlanner {
         if (/\b(password|credentials|secret|token|api.?key|private.?key)\b/i.test(this.q)) return 'blocked_sensitive';
         // Order matters — check specific before generic
         if (INTENT_PATTERNS.count.test(this.q)) return 'count';
-        if (INTENT_PATTERNS.sum.test(this.q)) return 'sum';
-        if (INTENT_PATTERNS.trend.test(this.q)) return 'trend';
+        if (INTENT_PATTERNS.trend.test(this.q)) return 'trend'; // Trend before sum (e.g. "total sales by month" = trend)
+        if (INTENT_PATTERNS.sum.test(this.q) && !INTENT_PATTERNS.trend.test(this.q)) return 'sum';
         if (INTENT_PATTERNS.breakdown.test(this.q)) return 'breakdown';
         if (INTENT_PATTERNS.comparison.test(this.q)) return 'comparison';
         if (INTENT_PATTERNS.topN.test(this.q)) return 'topN';
