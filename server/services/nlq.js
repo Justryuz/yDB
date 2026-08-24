@@ -32,7 +32,7 @@ const { withTunnel } = require('./ssh-tunnel');
 
 const SEMANTIC_TYPES = {
     identifier: /^id$|_id$|uuid|code|reference|ref_|sku|slug/i,
-    money: /amount|total|price|cost|revenue|sales|fee|commission|balance|value|subtotal|gross|net|salary|earning|payout|credit|debit|deposit|withdrawal/i,
+    money: /amount|total|price|cost|revenue|sales|fee|commission|balance|value|subtotal|gross|net|salary|earning|payout|credit|debit|deposit|withdrawal|discount|rate|min_order|max_order/i,
     datetime: /date|created|updated|time|timestamp|registered|joined|occurred|paid_at|completed_at|expired|deleted_at|started|ended|born|dob/i,
     category: /^status$|^state$|^type$|^category$|^role$|^tier$|^level$|^group$|^class$|^segment$|^plan$/i,
     person: /name|username|email|phone|company|customer_name|merchant_name|first_name|last_name|full_name|display_name/i,
@@ -343,6 +343,9 @@ class QueryPlanner {
 
     _detectIntent() {
         if (INTENT_PATTERNS.greeting.test(this.q) && this.q.split(/\s+/).length <= 4) return 'greeting';
+        // Catch non-questions (greetings, random words)
+        if (/^\s*(clear|reset|cancel|ok|okay|thanks|thank you|bye|goodbye)\s*$/i.test(this.q)) return 'greeting';
+        if (/^\s*(assalam|salam|selamat)/i.test(this.q)) return 'greeting';
         // Block sensitive/password queries
         if (/\b(password|credentials|secret|token|api.?key|private.?key)\b/i.test(this.q)) return 'blocked_sensitive';
         // Order matters — check specific before generic
@@ -382,6 +385,12 @@ class QueryPlanner {
 
             // Admin special case
             if (/\badmin\b/i.test(this.q) && /admin|user/i.test(tl)) score += 70;
+
+            // Sales special case — prefer orders/transactions over order_items
+            if (/\bsales\b/i.test(this.q)) {
+                if (/^order$/i.test(tl) || /^orders$/i.test(tl) || /transaction/i.test(tl)) score += 60;
+                if (/order.item/i.test(tl)) score -= 20; // Penalize order_items
+            }
 
             // Keyword map
             for (const [keywords, pattern] of Object.entries(TABLE_KEYWORD_MAP)) {
@@ -440,7 +449,11 @@ class QueryPlanner {
     }
 
     _planSum(table, info, filters, timeFilter) {
-        const col = info?.moneyColumns?.[0];
+        // Check if user specified a column name explicitly (e.g. "total discount_value from coupons")
+        const colNames = Object.keys(info?.columns || {});
+        const explicitCol = colNames.find(c => this.q.includes(c.toLowerCase()));
+        const col = explicitCol || info?.moneyColumns?.[0];
+        
         if (!col) {
             // Search other tables for money column
             for (const [tName, tInfo] of Object.entries(this.si.tables)) {
@@ -490,10 +503,9 @@ class QueryPlanner {
 
     _planBreakdown(table, info, filters, timeFilter) {
         const groupCol = this._detectGroupCol() || this.si.getBestCategoryColumn(table) || Object.keys(info?.columns || {})[1] || 'id';
-        const moneyCol = info?.moneyColumns?.[0];
-        const agg = moneyCol ? `SUM(${moneyCol})` : 'COUNT(*)';
         const where = this._buildWhere(filters, timeFilter);
-        return { sql: `SELECT ${groupCol}, ${agg} AS total FROM ${table}${where} GROUP BY ${groupCol} ORDER BY total DESC LIMIT 20`, explanation: `Distribution of ${this._humanize(table)} segmented by ${this._humanize(groupCol)}. This helps you understand the composition and identify which segments need attention.`, chartType: 'pie', confidence: 0.89 };
+        // Breakdown uses COUNT by default (not SUM) — users want to see distribution of records
+        return { sql: `SELECT ${groupCol}, COUNT(*) AS total FROM ${table}${where} GROUP BY ${groupCol} ORDER BY total DESC LIMIT 20`, explanation: `Distribution of ${this._humanize(table)} segmented by ${this._humanize(groupCol)}. This helps you understand the composition and identify which segments need attention.`, chartType: 'pie', confidence: 0.89 };
     }
 
     _planTopN(table, info, filters, timeFilter) {
