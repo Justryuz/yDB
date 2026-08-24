@@ -48,11 +48,11 @@ const SEMANTIC_TYPES = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const METRIC_CATALOG = {
-    revenue: { keywords: /revenue|sales|jualan|hasil|income|earnings/i, aggregation: 'SUM', semanticTypes: ['money'], tableRoles: ['transaction', 'order', 'payment'] },
-    total_amount: { keywords: /total amount|total value|jumlah nilai|jumlah bayaran/i, aggregation: 'SUM', semanticTypes: ['money'] },
+    revenue: { keywords: /revenue|sales|income|earnings/i, aggregation: 'SUM', semanticTypes: ['money'], tableRoles: ['transaction', 'order', 'payment'] },
+    total_amount: { keywords: /total amount|total value/i, aggregation: 'SUM', semanticTypes: ['money'] },
     order_count: { keywords: /order count|number of orders|bilangan pesanan/i, aggregation: 'COUNT', tableRoles: ['order', 'transaction'] },
-    customer_count: { keywords: /customer count|number of customers|bilangan pelanggan|how many users|berapa ramai/i, aggregation: 'COUNT_DISTINCT', distinctCol: 'identifier', tableRoles: ['user', 'customer'] },
-    aov: { keywords: /aov|average order value|nilai purata pesanan|average transaction/i, formula: 'SUM({money}) / COUNT(*)', semanticTypes: ['money'] },
+    customer_count: { keywords: /customer count|number of customers|how many users/i, aggregation: 'COUNT_DISTINCT', distinctCol: 'identifier', tableRoles: ['user', 'customer'] },
+    aov: { keywords: /aov|average order value|average transaction/i, formula: 'SUM({money}) / COUNT(*)', semanticTypes: ['money'] },
     growth: { keywords: /growth|pertumbuhan|increase|peningkatan|change/i, comparison: true },
     conversion_rate: { keywords: /conversion rate|kadar penukaran/i, formula: 'COUNT(CASE WHEN {category}=completed) / COUNT(*) * 100' },
     profit_margin: { keywords: /profit margin|margin keuntungan/i, formula: '(SUM({revenue}) - SUM({cost})) / SUM({revenue}) * 100' },
@@ -64,19 +64,19 @@ const METRIC_CATALOG = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const INTENT_PATTERNS = {
-    count: /\b(how many|count|total number|number of|berapa.*ramai|berapa.*banyak|jumlah.*rekod)\b/i,
-    sum: /\b(total amount|total sales|total revenue|total deposit|total value|sum of|jumlah.*nilai|gross|net total)\b|how much.*(revenue|sales|deposit|money|amount|earn|spend|paid|cost)/i,
-    average: /\b(average|avg|mean|typical|purata)\b/i,
-    maximum: /\b(maximum|highest|largest|biggest|most expensive|tertinggi)\b/i,
-    minimum: /\b(minimum|lowest|smallest|cheapest|terendah)\b/i,
-    trend: /\b(trend|monthly|daily|weekly|over time|growth|per day|per week|per month|per year|bulanan|harian)\b/i,
-    breakdown: /\b(breakdown|group by|by status|by type|by category|by role|distribution|segment|pecahan|mengikut)\b/i,
+    count: /\b(how many|count|total number|number of)\b/i,
+    sum: /\b(total amount|total sales|total revenue|total deposit|total value|sum of|gross|net total)\b|how much.*(revenue|sales|deposit|money|amount|earn|spend|paid|cost)/i,
+    average: /\b(average|avg|mean|typical)\b/i,
+    maximum: /\b(maximum|highest|largest|biggest|most expensive)\b/i,
+    minimum: /\b(minimum|lowest|smallest|cheapest)\b/i,
+    trend: /\b(trend|monthly|daily|weekly|over time|growth|per day|per week|per month|per year)\b/i,
+    breakdown: /\b(breakdown|group by|by status|by type|by category|by role|distribution|segment)\b/i,
     topN: /\b(top|best|leading|biggest|most|teratas)\b/i,
-    bottomN: /\b(bottom|worst|least|fewest|lowest|terendah)\b/i,
-    comparison: /\b(compare|versus|vs|difference|growth|decline|change|bandingkan)\b/i,
-    list: /\b(list|show|display|all|view|senarai|tunjuk|papar)\b/i,
-    recent: /\b(recent|latest|newest|last|terkini|terbaru)\b/i,
-    search: /\b(find|search|look for|locate|cari)\b/i,
+    bottomN: /\b(bottom|worst|least|fewest|lowest)\b/i,
+    comparison: /\b(compare|versus|vs|difference|growth|decline|change)\b/i,
+    list: /\b(list|show|display|all|view)\b/i,
+    recent: /\b(recent|latest|newest|last)\b/i,
+    search: /\b(find|search|look for|locate)\b/i,
     greeting: /^\s*(hi|hello|hey|morning|good morning|good afternoon|assalamualaikum|salam)\b/i,
 };
 
@@ -85,24 +85,24 @@ const INTENT_PATTERNS = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TIME_EXPRESSIONS = {
-    today: { pattern: /\btoday\b|\bhari\s*ini\b/i, mysql: (c) => `DATE(${c}) = CURDATE()`, pg: (c) => `DATE(${c}) = CURRENT_DATE` },
-    yesterday: { pattern: /\byesterday\b|\bsemalam\b/i, mysql: (c) => `DATE(${c}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, pg: (c) => `DATE(${c}) = CURRENT_DATE - 1` },
-    this_week: { pattern: /\bthis\s*week\b|\bminggu\s*ini\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE)` },
-    last_week: { pattern: /\blast\s*week\b|\bminggu\s*lepas\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE())+7) DAY) AND ${c} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${c} < DATE_TRUNC('week', CURRENT_DATE)` },
-    this_month: { pattern: /\bthis\s*month\b|\bbulan\s*ini\b|\bmtd\b/i, mysql: (c) => `${c} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE)` },
-    last_month: { pattern: /\blast\s*month\b|\bbulan\s*lepas\b/i, mysql: (c) => `${c} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${c} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND ${c} < DATE_TRUNC('month', CURRENT_DATE)` },
-    this_quarter: { pattern: /\bthis\s*quarter\b|\bsuku\s*tahun\s*ini\b|\bqtd\b/i, mysql: (c) => `QUARTER(${c}) = QUARTER(CURDATE()) AND YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `${c} >= DATE_TRUNC('quarter', CURRENT_DATE)` },
-    last_quarter: { pattern: /\blast\s*quarter\b|\bsuku\s*tahun\s*lepas\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '3 months'` },
-    this_year: { pattern: /\bthis\s*year\b|\btahun\s*ini\b|\bytd\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE)` },
-    last_year: { pattern: /\blast\s*year\b|\btahun\s*lepas\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE()) - 1`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE) - 1` },
-    last_7_days: { pattern: /\blast\s*7\s*days\b|\b7\s*hari\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '7 days'` },
-    last_30_days: { pattern: /\blast\s*30\s*days\b|\b30\s*hari\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '30 days'` },
-    last_90_days: { pattern: /\blast\s*90\s*days\b|\b90\s*hari\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '90 days'` },
-    last_12_months: { pattern: /\bpast\s*12\s*months\b|\b12\s*bulan\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '12 months'` },
+    today: { pattern: /\btoday\b/i, mysql: (c) => `DATE(${c}) = CURDATE()`, pg: (c) => `DATE(${c}) = CURRENT_DATE` },
+    yesterday: { pattern: /\byesterday\b/i, mysql: (c) => `DATE(${c}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, pg: (c) => `DATE(${c}) = CURRENT_DATE - 1` },
+    this_week: { pattern: /\bthis\s*week\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE)` },
+    last_week: { pattern: /\blast\s*week\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE())+7) DAY) AND ${c} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${c} < DATE_TRUNC('week', CURRENT_DATE)` },
+    this_month: { pattern: /\bthis\s*month\b|\bmtd\b/i, mysql: (c) => `${c} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE)` },
+    last_month: { pattern: /\blast\s*month\b/i, mysql: (c) => `${c} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${c} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND ${c} < DATE_TRUNC('month', CURRENT_DATE)` },
+    this_quarter: { pattern: /\bthis\s*quarter\b|\bqtd\b/i, mysql: (c) => `QUARTER(${c}) = QUARTER(CURDATE()) AND YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `${c} >= DATE_TRUNC('quarter', CURRENT_DATE)` },
+    last_quarter: { pattern: /\blast\s*quarter\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '3 months'` },
+    this_year: { pattern: /\bthis\s*year\b|\bytd\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE)` },
+    last_year: { pattern: /\blast\s*year\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE()) - 1`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE) - 1` },
+    last_7_days: { pattern: /\blast\s*7\s*days\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '7 days'` },
+    last_30_days: { pattern: /\blast\s*30\s*days\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '30 days'` },
+    last_90_days: { pattern: /\blast\s*90\s*days\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '90 days'` },
+    last_12_months: { pattern: /\bpast\s*12\s*months\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '12 months'` },
 };
 
 const STATUS_PATTERNS = {
-    active: /\b(active|aktif|enabled|live|online)\b/i,
+    active: /\b(active|enabled|live|online)\b/i,
     inactive: /\b(inactive|disabled|offline|dormant|suspended)\b/i,
     pending: /\b(pending|awaiting|in progress|processing|queued)\b/i,
     approved: /\b(approved|accepted|confirmed|verified|completed|success|successful)\b/i,
@@ -356,7 +356,7 @@ class QueryPlanner {
         if (INTENT_PATTERNS.search.test(this.q)) return 'search';
         if (INTENT_PATTERNS.recent.test(this.q)) return 'recent';
         if (INTENT_PATTERNS.list.test(this.q)) return 'list';
-        if (/\b(how (much|many)|total|berapa)\b/i.test(this.q)) return 'count';
+        if (/\b(how (much|many)|total)\b/i.test(this.q)) return 'count';
         return 'list';
     }
 
@@ -484,11 +484,11 @@ class QueryPlanner {
         const moneyCol = info?.moneyColumns?.[0];
         const valueExpr = moneyCol ? `SUM(${moneyCol})` : 'COUNT(*)';
         let fmt, alias, period;
-        if (/\bdaily\b|\bper day\b|\bharian\b/i.test(this.q)) { fmt = this.isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`; alias = 'day'; period = 'daily'; }
-        else if (/\bweekly\b|\bper week\b|\bmingguan\b/i.test(this.q)) { fmt = this.isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`; alias = 'week'; period = 'weekly'; }
+        if (/\bdaily\b|\bper day\b/i.test(this.q)) { fmt = this.isMySQL ? `DATE(${dateCol})` : `DATE(${dateCol})`; alias = 'day'; period = 'daily'; }
+        else if (/\bweekly\b|\bper week\b/i.test(this.q)) { fmt = this.isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-W%u')` : `TO_CHAR(${dateCol}, 'IYYY-"W"IW')`; alias = 'week'; period = 'weekly'; }
         else { fmt = this.isMySQL ? `DATE_FORMAT(${dateCol}, '%Y-%m')` : `TO_CHAR(${dateCol}, 'YYYY-MM')`; alias = 'month'; period = 'monthly'; }
         const where = this._buildWhere(filters, null); // Don't apply time filter on trends (they show all periods)
-        return { sql: `SELECT ${fmt} AS ${alias}, ${valueExpr} AS total FROM ${table}${where} GROUP BY ${alias} ORDER BY ${alias} DESC LIMIT 12`, explanation: `This chart shows the ${period} ${moneyCol ? this._humanize(moneyCol) + ' volume' : 'activity'} for ${this._humanize(table)} over the last 12 periods. Use this to identify growth patterns and seasonal trends.`, chartType: /daily|harian/i.test(this.q) ? 'line' : 'bar', confidence: 0.91 };
+        return { sql: `SELECT ${fmt} AS ${alias}, ${valueExpr} AS total FROM ${table}${where} GROUP BY ${alias} ORDER BY ${alias} DESC LIMIT 12`, explanation: `This chart shows the ${period} ${moneyCol ? this._humanize(moneyCol) + ' volume' : 'activity'} for ${this._humanize(table)} over the last 12 periods. Use this to identify growth patterns and seasonal trends.`, chartType: /daily/i.test(this.q) ? 'line' : 'bar', confidence: 0.91 };
     }
 
     _planBreakdown(table, info, filters, timeFilter) {
@@ -532,7 +532,7 @@ class QueryPlanner {
     }
 
     _planSearch(table, info) {
-        const term = this.q.replace(/\b(find|search|look\s*for|locate|cari)\b/gi, '').trim();
+        const term = this.q.replace(/\b(find|search|look\s*for|locate)\b/gi, '').trim();
         const searchCol = this.si.getBestNameColumn(table) || Object.keys(info?.columns || {})[0] || 'id';
         const safeCols = this.si.getSafeColumns(table);
         return { sql: `SELECT ${safeCols} FROM ${table} WHERE ${searchCol} LIKE '%${term.replace(/'/g, "''")}%' LIMIT 25`, explanation: `Search results for "${term}" in ${this._humanize(table)}, matching against ${this._humanize(searchCol)}.`, chartType: 'table', confidence: 0.85 };
