@@ -367,6 +367,7 @@ class NLQEngine {
         }
         // -- LIST / SHOW --
         else if (/\b(list|show|display|all|view)\b/i.test(q)) {
+            // Re-check if there's a better table match from the question context
             const n = Math.min(parseInt((q.match(/\d+/) || ['50'])[0]), 100);
             result.sql = `SELECT ${safeSelect} FROM ${targetTable}${whereClause} LIMIT ${n}`;
             result.explanation = `Displaying ${n} records from ${this._humanize(targetTable)}.${whereClause ? ' Filtered by your specified criteria.' : ' Showing all available data.'}`;
@@ -408,6 +409,12 @@ class NLQEngine {
             const readable = t.replace(/_/g, ' ').toLowerCase();
             const singular = tl.replace(/s$/, '');
             if (q.includes(tl) || q.includes(readable) || q.includes(singular)) return t;
+        }
+
+        // Match "admin" -> users or admins table
+        if (/\badmin\b/i.test(q)) {
+            const match = tables.find(t => /admin|user/i.test(t));
+            if (match) return match;
         }
 
         // Keyword map
