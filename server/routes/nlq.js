@@ -95,18 +95,33 @@ router.post('/suggest', async (req, res) => {
             options.ssh
         );
 
-        let schema;
+        let schema, adapter;
         try {
-            const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+            adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
             schema = await adapter.getSchema();
         } catch (err) {
             cleanup();
             return res.json({ suggestions: ['How many records are there?', 'Show latest 20 records'], tables: [], dbType: conn.db_type });
         }
+
+        // Check which tables have data (skip empty ones from suggestions)
+        const tablesWithData = {};
+        for (const [tableName, tableInfo] of Object.entries(schema.tables || {})) {
+            try {
+                const countResult = await adapter.query(`SELECT COUNT(*) AS c FROM ${tableName}`);
+                const count = parseInt(countResult.data?.[0]?.c || countResult.data?.[0]?.C || 0);
+                if (count > 0) {
+                    tablesWithData[tableName] = { ...tableInfo, rowCount: count };
+                }
+            } catch (e) {
+                // Skip tables we can't count (views, etc.)
+            }
+        }
         cleanup();
 
-        // Analyze schema and generate intelligent suggestions
-        const suggestions = generateSmartSuggestions(schema, conn.db_type);
+        // Generate suggestions only for tables with data
+        const filteredSchema = { tables: tablesWithData };
+        const suggestions = generateSmartSuggestions(filteredSchema, conn.db_type);
 
         res.json({
             suggestions: suggestions.questions,
