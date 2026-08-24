@@ -40,6 +40,11 @@ class PoolManager {
         const adapter = createAdapter(dbType, opts);
         await adapter.connect();
 
+        // Don't cache REST API adapters (they don't benefit from pooling)
+        if (dbType === 'restapi' || dbType === 'api') {
+            return adapter;
+        }
+
         this.pools.set(key, {
             adapter,
             lastUsed: Date.now(),
