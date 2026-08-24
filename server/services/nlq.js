@@ -50,13 +50,13 @@ const SEMANTIC_TYPES = {
 const METRIC_CATALOG = {
     revenue: { keywords: /revenue|sales|income|earnings/i, aggregation: 'SUM', semanticTypes: ['money'], tableRoles: ['transaction', 'order', 'payment'] },
     total_amount: { keywords: /total amount|total value/i, aggregation: 'SUM', semanticTypes: ['money'] },
-    order_count: { keywords: /order count|number of orders|bilangan pesanan/i, aggregation: 'COUNT', tableRoles: ['order', 'transaction'] },
+    order_count: { keywords: /order count|number of orders/i, aggregation: 'COUNT', tableRoles: ['order', 'transaction'] },
     customer_count: { keywords: /customer count|number of customers|how many users/i, aggregation: 'COUNT_DISTINCT', distinctCol: 'identifier', tableRoles: ['user', 'customer'] },
     aov: { keywords: /aov|average order value|average transaction/i, formula: 'SUM({money}) / COUNT(*)', semanticTypes: ['money'] },
-    growth: { keywords: /growth|pertumbuhan|increase|peningkatan|change/i, comparison: true },
-    conversion_rate: { keywords: /conversion rate|kadar penukaran/i, formula: 'COUNT(CASE WHEN {category}=completed) / COUNT(*) * 100' },
-    profit_margin: { keywords: /profit margin|margin keuntungan/i, formula: '(SUM({revenue}) - SUM({cost})) / SUM({revenue}) * 100' },
-    refund_rate: { keywords: /refund rate|kadar bayaran balik/i, formula: 'COUNT(CASE WHEN status=refunded) / COUNT(*) * 100' },
+    growth: { keywords: /growth|increase|change/i, comparison: true },
+    conversion_rate: { keywords: /conversion rate/i, formula: 'COUNT(CASE WHEN {category}=completed) / COUNT(*) * 100' },
+    profit_margin: { keywords: /profit margin/i, formula: '(SUM({revenue}) - SUM({cost})) / SUM({revenue}) * 100' },
+    refund_rate: { keywords: /refund rate/i, formula: 'COUNT(CASE WHEN status=refunded) / COUNT(*) * 100' },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
