@@ -36,14 +36,14 @@ class RestAPIAdapter extends BaseAdapter {
         return new Promise((resolve, reject) => {
             const { spawn } = require('child_process');
             const headers = this._getHeaders();
-            const args = ['-sk', '--max-time', '20'];
+            const args = ['-sk', '--max-time', '20', '--tls-max', '1.2'];
             for (const [key, val] of Object.entries(headers)) {
                 args.push('-H', `${key}: ${val}`);
             }
             args.push(url);
 
-            const curlPath = process.platform === 'win32' ? 'C:/Windows/System32/curl.exe' : 'curl';
-            const proc = spawn(curlPath, args, { windowsHide: true });
+            const curlPath = process.platform === 'win32' ? 'C:\\Windows\\System32\\curl.exe' : 'curl';
+            const proc = spawn(curlPath, args, { windowsHide: true, shell: false });
 
             let stdout = '';
             let stderr = '';
