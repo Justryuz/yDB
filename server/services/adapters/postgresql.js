@@ -8,16 +8,36 @@ const BaseAdapter = require('./base');
 class PostgreSQLAdapter extends BaseAdapter {
     async connect() {
         const { Client } = require('pg');
-        this.connection = new Client({
+        const connOpts = {
             host: this.opts.host,
             port: this.opts.port,
             user: this.opts.user,
             password: this.opts.password,
             database: this.opts.database,
-            connectionTimeoutMillis: 10000,
-            statement_timeout: 60000
-        });
-        await this.connection.connect();
+            connectionTimeoutMillis: 15000,
+            statement_timeout: 60000,
+            // Enable SSL for cloud-hosted PostgreSQL (Aiven, Supabase, Neon, RDS, etc.)
+            ssl: this.opts.ssl === false ? undefined : { rejectUnauthorized: false }
+        };
+
+        try {
+            this.connection = new Client(connOpts);
+            await this.connection.connect();
+        } catch (err) {
+            // If SSL fails, retry without SSL (local databases)
+            if (connOpts.ssl && (err.message.includes('SSL') || err.message.includes('self-signed'))) {
+                delete connOpts.ssl;
+                this.connection = new Client(connOpts);
+                await this.connection.connect();
+            } else if (!connOpts.ssl) {
+                // If no SSL fails, try with SSL (cloud databases require it)
+                connOpts.ssl = { rejectUnauthorized: false };
+                this.connection = new Client(connOpts);
+                await this.connection.connect();
+            } else {
+                throw err;
+            }
+        }
         this.connected = true;
     }
 
