@@ -1,6 +1,6 @@
 /**
  * @file nlq.js
- * @description BI Copilot — Natural Language Query (Text-to-SQL) frontend module.
+ * @description Copilot — Natural Language Query (Text-to-SQL) frontend module.
  * Provides a chat interface where business users ask questions in plain language,
  * the system translates to SQL, executes against connected DB, and displays results
  * with appropriate visualizations (table, chart, number).
@@ -170,7 +170,7 @@ YDB.NLQ = {
     },
 
     /**
-     * Send a question to the BI Copilot
+     * Send a question to the Copilot
      */
     ask: function () {
         var input = document.getElementById('nlq-input');

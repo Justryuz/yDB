@@ -575,7 +575,7 @@ function validateSQL(sql) {
     const trimmed = sql.trim();
     // Block destructive
     if (/^\s*(DROP|DELETE|TRUNCATE|ALTER|INSERT|UPDATE|GRANT|REVOKE|CREATE|EXEC|EXECUTE|CALL)\b/i.test(trimmed)) {
-        return { valid: false, reason: 'Only read-only (SELECT) queries are allowed through the BI Copilot.' };
+        return { valid: false, reason: 'Only read-only (SELECT) queries are allowed through the Copilot.' };
     }
     // Must start with SELECT/WITH/SHOW/DESCRIBE
     if (!/^\s*(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN)\b/i.test(trimmed)) {

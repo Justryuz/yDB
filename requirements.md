@@ -1,7 +1,7 @@
 # yDB - Tame any database.
 
 ## Overview
-yDB is a production-grade, web-based database management platform with multi-connection support, visual query builder with real cross-database join capabilities, AI-powered BI Copilot (Text-to-SQL), and enterprise security features. Architecturally comparable to AWS RDS + IAM + CloudTrail + QuickSight Q unified in one tool.
+yDB is a production-grade, web-based database management platform with multi-connection support, visual query builder with real cross-database join capabilities, AI-powered Copilot (Text-to-SQL), and enterprise security features. Architecturally comparable to AWS RDS + IAM + CloudTrail + QuickSight Q unified in one tool.
 
 ## Target Users
 - Developers managing databases during development
@@ -53,11 +53,11 @@ yDB is a production-grade, web-based database management platform with multi-con
 - **Explorer**: Tree view + data viewer + inline editing
 - **Visual Builder**: Drag-drop cross-DB joins with federated execution
 - **SQL Editor**: Auto-complete, multi-tab, Ctrl+Enter execution
-- **BI Copilot**: Chat-based natural language query interface with chart visualization
+- **Copilot**: Chat-based natural language query interface with chart visualization
 - **Terminal**: CLI-style interface with command history
 - **Admin Panel**: Users, Audit, Backup, Data Gen, Migration, Procedures, Alerts, Plugins
 
-### AI / NLQ Layer (BI Copilot)
+### AI / NLQ Layer (Copilot)
 - **Text-to-SQL**: User types business question → AI generates SQL → execute → visualize
 - **Schema-Aware**: Reads connected database schema for context-accurate SQL generation
 - **Dynamic Suggestions**: Analyzes schema to suggest relevant queries per table
@@ -148,10 +148,10 @@ npm run db:seed       # Create admin (random password printed once)
 npm start             # http://localhost:3000
 ```
 
-## BI Copilot — Text-to-SQL (NLQ)
+## Copilot — Text-to-SQL (NLQ)
 
 ### How it works:
-1. User opens "BI Copilot" tab
+1. User opens "Copilot" tab
 2. Selects a connected database from dropdown
 3. Dynamic suggestions appear based on actual schema analysis
 4. User types a business question in plain English

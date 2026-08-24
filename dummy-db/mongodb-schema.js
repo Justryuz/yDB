@@ -172,7 +172,7 @@ var newdevId = users[2]._id;
 db.posts.insertMany([
     {
         authorId: guruId,
-        content: 'Just launched yDB v2.0 — now with AI-powered BI Copilot! Ask questions in plain English and get SQL results instantly.',
+        content: 'Just launched yDB v2.0 — now with AI-powered Copilot! Ask questions in plain English and get SQL results instantly.',
         type: 'text',
         tags: ['ydb', 'database', 'ai', 'launch'],
         likes: 342,
@@ -212,7 +212,7 @@ db.posts.insertMany([
     },
     {
         authorId: guruId,
-        content: 'Pro tip: Use "monthly trend of transactions" in yDB BI Copilot to get instant revenue charts.',
+        content: 'Pro tip: Use "monthly trend of transactions" in yDB Copilot to get instant revenue charts.',
         type: 'text',
         tags: ['ydb', 'tips', 'bi'],
         likes: 95,

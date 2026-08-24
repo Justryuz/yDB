@@ -8,7 +8,7 @@ A production-grade, open-source database management platform with cross-database
 
 - **Cross-Database Joins** — Join tables from MySQL + PostgreSQL + MongoDB in one query via DuckDB engine (9ms for 2-way, 13ms for 3-way joins)
 - **12 Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL
-- **BI Copilot (Text-to-SQL)** — Ask business questions in plain language (BM/EN), get SQL + results + charts instantly
+- **Copilot (Text-to-SQL)** — Ask business questions in plain language (BM/EN), get SQL + results + charts instantly
 - **Visual Query Builder** — Drag-drop tables, auto-detect joins, generate SQL
 - **Built-in API Client** — Postman-like HTTP client with collections and auth
 - **Server-Side Security** — JWT auth, RBAC, AES-256 encrypted credentials, immutable audit log, per-user rate limiting
@@ -118,7 +118,7 @@ yDB is hardened for production deployment. See [SECURITY.md](SECURITY.md) for fu
 - For unsupported backends: connection is destroyed to abort the query
 - Cancelled queries are logged to the audit trail with status `cancelled`
 
-## BI Copilot — Text-to-SQL (NLQ)
+## Copilot — Text-to-SQL (NLQ)
 
 Natural language interface for business users who don't know SQL:
 
@@ -217,7 +217,7 @@ NLQ_MODEL=gpt-4o-mini
 | POST | `/api/query/:executionId/cancel` | Cancel running query |
 | GET | `/api/query/executions` | List recent executions |
 | POST | `/api/federated/execute` | Cross-DB join (DuckDB) |
-| **POST** | **`/api/nlq/ask`** | **BI Copilot — natural language → SQL → results** |
+| **POST** | **`/api/nlq/ask`** | **Copilot — natural language → SQL → results** |
 | **POST** | **`/api/nlq/suggest`** | **Get suggested questions for a connection** |
 | GET | `/api/explorer/:id/schema` | Get database schema |
 | GET | `/api/stream/query` | SSE streaming results |

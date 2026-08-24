@@ -1,6 +1,6 @@
 # Dummy Databases for yDB
 
-Sample schemas and data for testing yDB connections and BI Copilot features.
+Sample schemas and data for testing yDB connections and Copilot features.
 
 ## Schemas
 
@@ -33,7 +33,7 @@ sqlite3 ydb_tasks.db < sqlite-schema.sql
 mongosh < mongodb-schema.js
 ```
 
-## Testing with yDB BI Copilot
+## Testing with yDB Copilot
 
 After importing, connect to the database in yDB and try these questions:
 

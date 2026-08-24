@@ -1,6 +1,6 @@
 /**
  * @file routes/nlq.js
- * @description Natural Language Query API — Text-to-SQL BI Copilot.
+ * @description Natural Language Query API — Text-to-SQL Copilot.
  * Accepts business questions in natural language, returns SQL + results + chart suggestions.
  */
 
