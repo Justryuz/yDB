@@ -48,7 +48,9 @@ router.get('/:connectionId/schema', async (req, res) => {
         const client = getClient(conn.db_type);
 
         const schema = await client.getSchemas({
-            host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name
+            host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name,
+            endpoints: (conn.options || {}).endpoints || [],
+            options: conn.options || {}
         });
 
         res.json({

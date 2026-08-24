@@ -14,21 +14,29 @@ const BaseAdapter = require('./base');
 
 class RestAPIAdapter extends BaseAdapter {
     async connect() {
-        // Validate we can reach the API
+        // Validate we can reach the API using the first configured endpoint or base URL
         const baseUrl = this._getBaseUrl();
+        const endpoints = this.opts.endpoints || this.opts.options?.endpoints || [];
+        const testUrl = endpoints.length > 0 ? baseUrl + (endpoints[0].path || '') : baseUrl;
+
+        // Disable SSL rejection for APIs with self-signed certs
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
         try {
-            const response = await fetch(baseUrl, {
+            const response = await fetch(testUrl, {
                 method: 'GET',
                 headers: this._getHeaders(),
-                signal: AbortSignal.timeout(10000)
+                signal: AbortSignal.timeout(15000)
             });
-            if (!response.ok && response.status !== 404) {
-                throw new Error(`API returned ${response.status}: ${response.statusText}`);
-            }
+            // Any HTTP response means API is reachable
             this.connected = true;
         } catch (err) {
-            if (err.name === 'TimeoutError') throw new Error('API connection timeout (10s)');
-            throw new Error(`Cannot reach API: ${err.message}`);
+            if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+                throw new Error('API connection timeout (15s)');
+            }
+            throw new Error(`Cannot reach API at ${testUrl}: ${err.message}`);
+        } finally {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
         }
     }
 
