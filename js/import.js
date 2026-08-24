@@ -101,23 +101,41 @@ YDB.Import = {
 
     _execute: function () {
         if (!this.parsedData) { YDB.UI.toast('No data loaded', 'warning'); return; }
+        if (!this.parsedColumns || !this.parsedColumns.length) { YDB.UI.toast('No columns detected', 'warning'); return; }
         var tableName = document.getElementById('import-table-name').value.trim() || 'imported_data';
         var connId = document.getElementById('import-target-conn').value;
         if (!connId) { YDB.UI.toast('Select target connection', 'warning'); return; }
 
-        // Create table in mock schema
-        var schema = YDB.MockData.schemas[connId];
-        if (!schema) { YDB.UI.toast('Invalid connection', 'error'); return; }
+        var self = this;
 
-        var columns = this.parsedColumns.map(function (c) {
-            return { name: c, type: 'VARCHAR(255)', key: '', nullable: true };
-        });
-        schema.tables[tableName] = { columns: columns, data: this.parsedData };
+        // Use API to import data
+        if (YDB.API.isOnline() && YDB.API.token) {
+            YDB.API.post('/import/execute', {
+                connectionId: parseInt(connId),
+                tableName: tableName,
+                columns: this.parsedColumns,
+                data: this.parsedData
+            }).then(function (res) {
+                YDB.UI.toast('Imported ' + (res.rowCount || self.parsedData.length) + ' rows into ' + tableName, 'success');
+                self._clear();
+            }).catch(function (err) {
+                YDB.UI.toast('Import failed: ' + err.message, 'error');
+            });
+        } else {
+            // Fallback: store in local mock schema
+            var schema = YDB.MockData.schemas[connId];
+            if (!schema) { schema = { name: 'local', tables: {} }; YDB.MockData.schemas[connId] = schema; }
 
-        this._clear();
-        YDB.Connections.render();
-        YDB.Builder.renderTablesList();
-        YDB.UI.toast('Imported ' + this.parsedData.length + ' rows into ' + tableName, 'success');
+            var columns = this.parsedColumns.map(function (c) {
+                return { name: c, type: 'VARCHAR(255)', key: '', nullable: true };
+            });
+            schema.tables[tableName] = { columns: columns, data: this.parsedData };
+
+            this._clear();
+            YDB.Connections.render();
+            YDB.Builder.renderTablesList();
+            YDB.UI.toast('Imported ' + this.parsedData.length + ' rows into ' + tableName, 'success');
+        }
     },
 
     _clear: function () {
