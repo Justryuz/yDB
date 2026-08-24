@@ -20,6 +20,7 @@ class RestAPIAdapter extends BaseAdapter {
 
         try {
             const data = await this._curlRequest(testUrl);
+            if (!data || data.length === 0) throw new Error('Empty response');
             this.connected = true;
         } catch (err) {
             throw new Error(`Cannot reach API at ${testUrl}: ${err.message}`);
@@ -33,30 +34,29 @@ class RestAPIAdapter extends BaseAdapter {
      */
     _curlRequest(url) {
         return new Promise((resolve, reject) => {
-            const { execFile } = require('child_process');
+            const { spawn } = require('child_process');
             const headers = this._getHeaders();
-            const args = ['-sk', '--max-time', '15', '-H', 'Accept: application/json'];
+            const args = ['-sk', '--max-time', '20'];
             for (const [key, val] of Object.entries(headers)) {
-                if (key !== 'Accept') args.push('-H', `${key}: ${val}`);
+                args.push('-H', `${key}: ${val}`);
             }
             args.push(url);
 
-            execFile('curl', args, { maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
-                if (err) {
-                    // Fallback to native fetch
-                    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-                    fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(15000) })
-                        .then(r => r.text())
-                        .then(text => { process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'; resolve(text); })
-                        .catch(e => { process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1'; reject(e); });
-                    return;
-                }
-                try {
+            const curlPath = process.platform === 'win32' ? 'C:/Windows/System32/curl.exe' : 'curl';
+            const proc = spawn(curlPath, args, { windowsHide: true });
+
+            let stdout = '';
+            let stderr = '';
+            proc.stdout.on('data', chunk => { stdout += chunk; });
+            proc.stderr.on('data', chunk => { stderr += chunk; });
+            proc.on('close', code => {
+                if (code !== 0 || (!stdout && stderr)) {
+                    reject(new Error(stderr || `curl exit code ${code}`));
+                } else {
                     resolve(stdout);
-                } catch (e) {
-                    reject(new Error('Invalid response'));
                 }
             });
+            proc.on('error', err => reject(err));
         });
     }
 
@@ -73,10 +73,17 @@ class RestAPIAdapter extends BaseAdapter {
 
         const parsed = this._parseSql(sql);
         const url = this._buildUrl(parsed.endpoint, parsed.params);
+        console.log('[REST-API] Query:', sql, '→ URL:', url);
 
         try {
             const raw = await this._curlRequest(url);
             const data = JSON.parse(raw);
+
+            // Check if API returned an error
+            if (data.status === 404 || data.error === 'Not found') {
+                throw new Error(data.message || 'API endpoint not found');
+            }
+
             const rows = this._extractRows(data);
             const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
