@@ -97,7 +97,7 @@ YDB.Connections = {
         var modal = document.getElementById('modal-connection');
         var form = document.getElementById('form-connection');
         if (editId) {
-            var conn = YDB.State.connections.find(function (c) { return c.id === editId; });
+            var conn = YDB.State.connections.find(function (c) { return c.id == editId; });
             if (!conn) return;
             document.getElementById('conn-modal-title').textContent = 'Edit Connection';
             document.getElementById('conn-edit-id').value = conn.id;
