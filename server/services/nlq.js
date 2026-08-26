@@ -737,7 +737,7 @@ USER QUESTION: "${question}"`;
 
     async _callOpenAI(prompt) {
         try {
-            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` }, body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1024 }) });
+            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` }, body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_completion_tokens: 1024 }) });
             const data = await response.json();
             if (data.error) throw new Error(data.error.message || 'API error');
             return this._parseAIResponse(data.choices?.[0]?.message?.content || '');
