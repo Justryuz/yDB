@@ -727,11 +727,33 @@ USER QUESTION: "${question}"`;
 
     async _callBedrock(prompt) {
         try {
-            const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
-            const client = new BedrockRuntimeClient({ region: config.nlq?.region || 'us-east-1' });
-            const command = new InvokeModelCommand({ modelId: config.nlq?.model || 'anthropic.claude-3-haiku-20240307-v1:0', contentType: 'application/json', accept: 'application/json', body: JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
-            const response = await client.send(command);
-            return this._parseAIResponse(JSON.parse(new TextDecoder().decode(response.body)).content?.[0]?.text || '');
+            const bearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK;
+            const region = config.nlq?.region || 'us-east-1';
+            const model = config.nlq?.model || 'anthropic.claude-3-haiku-20240307-v1:0';
+
+            if (bearerToken) {
+                // Use Bearer Token authentication (short-term API key from Amazon Q)
+                const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/invoke`;
+                const body = JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] });
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${bearerToken}`, 'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD' },
+                    body
+                });
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(`Bedrock ${response.status}: ${err.substring(0, 200)}`);
+                }
+                const data = await response.json();
+                return this._parseAIResponse(data.content?.[0]?.text || '');
+            } else {
+                // Use standard AWS SDK credentials (IAM)
+                const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
+                const client = new BedrockRuntimeClient({ region });
+                const command = new InvokeModelCommand({ modelId: model, contentType: 'application/json', accept: 'application/json', body: JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
+                const response = await client.send(command);
+                return this._parseAIResponse(JSON.parse(new TextDecoder().decode(response.body)).content?.[0]?.text || '');
+            }
         } catch (err) { console.error('[NLQ] Bedrock error:', err.message); return { sql: '', explanation: 'LLM error: ' + err.message, chartType: 'table' }; }
     }
 
