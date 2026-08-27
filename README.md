@@ -1,8 +1,16 @@
 # yDB - Tame any database.
 
-A production-grade, open-source database management platform with cross-database joins powered by DuckDB, supporting 12+ database types simultaneously.
+A production-grade, open-source database management platform with AI-powered BI Copilot, cross-database joins powered by DuckDB, and support for 12+ database types. Built with **Kiro** and powered by **Amazon Q / Bedrock**.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Built With
+
+| Tool | Role |
+|---|---|
+| **Kiro** | AI-powered IDE — generated the entire platform (backend, frontend, security, tests) |
+| **Amazon Q Developer** | Provides Bedrock LLM for the BI Copilot intelligence layer |
+| **Amazon Bedrock (Nova)** | Text-to-SQL generation with self-correction for complex queries |
 
 ## Features
 
@@ -307,6 +315,47 @@ See [SECURITY.md](SECURITY.md) for the complete checklist. Key items:
 6. Open a Pull Request
 
 CI will run tests automatically. PRs with failing tests will not be merged.
+
+## Hackathon: AI for Government Digital Transformation
+
+yDB was built for the **"Use AI to Drive Government Digital Transformation"** hackathon theme.
+
+### How It Addresses the Theme
+
+| Category | yDB Solution |
+|---|---|
+| **Data & Decisions** | BI Copilot lets officers ask questions in plain English — instant analytics without SQL knowledge |
+| **Internal Ops** | Connect multiple government databases (MySQL, PostgreSQL, REST APIs) in one tool — eliminate manual data extraction |
+| **Citizen Services** | Pull public data APIs (e.g. FAMA commodity prices) and make them queryable by non-technical staff |
+| **Compliance & Policy** | Immutable audit log, role-based access, data masking — meets government security requirements |
+| **Workforce** | Zero onboarding — staff just type questions, AI handles the rest |
+
+### Architecture: Kiro + Amazon Q
+
+```
+Kiro (AI IDE)
+  └── Built entire yDB platform in one session
+        └── Backend (Express.js, 12 DB adapters, security)
+        └── Frontend (42 JS modules, chat UI, charts)
+        └── Tests (50 unit tests, CI pipeline)
+
+Amazon Q Developer
+  └── Bedrock Bearer Token
+        └── Powers BI Copilot LLM layer
+              └── Text-to-SQL with DDL context
+              └── Self-correction on query failure
+              └── Vector store learning from successful queries
+```
+
+### Demo Flow
+
+1. Connect to government REST API (FAMA commodity prices)
+2. Ask: "How many commodities?" → instant count
+3. Ask: "Top 10 by price" → bar chart visualization
+4. Ask: "Breakdown by state" → pie chart
+5. Show security: password queries blocked, sensitive columns hidden
+6. Show audit log: every query recorded with timestamp + user
+7. Show multi-DB: query MySQL + PostgreSQL + REST API from same interface
 
 ## License
 
