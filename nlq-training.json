@@ -20,7 +20,7 @@
       "trend",
       "invoices"
     ],
-    "ts": 1787816353861
+    "ts": 1787819897208
   },
   {
     "question": "Breakdown of projects by status",
@@ -64,7 +64,7 @@
       "subscriptions",
       "status"
     ],
-    "ts": 1787816590229
+    "ts": 1787819878196
   },
   {
     "question": "Monthly price trend from products",
@@ -283,7 +283,7 @@
   },
   {
     "question": "Latest 10 projects",
-    "sql": "SELECT id, account_id, name, description, status, daily_event_limit, created_by, created_at FROM projects ORDER BY created_at DESC LIMIT 10",
+    "sql": "SELECT id, account_id, name, description, status, daily_event_limit, created_by, created_at FROM projects ORDER BY created_by DESC LIMIT 10",
     "connectionId": "24",
     "dbType": "postgresql",
     "tables": [
@@ -300,10 +300,10 @@
       "latest",
       "projects"
     ],
-    "ts": 1787816144338
+    "ts": 1787819886099
   },
   {
-    "question": "Breakdown of invoices by status",
+    "question": "Breakdown of Invoices by status",
     "sql": "SELECT status, COUNT(*) AS total FROM invoices GROUP BY status ORDER BY total DESC LIMIT 20",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -322,10 +322,10 @@
       "invoices",
       "status"
     ],
-    "ts": 1787816592820
+    "ts": 1787819881748
   },
   {
-    "question": "Monthly trend of Accounts",
+    "question": "Monthly trend of accounts",
     "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM accounts GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -344,7 +344,7 @@
       "trend",
       "accounts"
     ],
-    "ts": 1787816612086
+    "ts": 1787819891891
   },
   {
     "question": "total admin",
@@ -371,7 +371,7 @@
   },
   {
     "question": "Total total from invoices",
-    "sql": "SELECT SUM(total) AS total_total FROM invoices",
+    "sql": "SELECT COUNT(*) AS total FROM invoices",
     "connectionId": "24",
     "dbType": "postgresql",
     "tables": [
@@ -389,10 +389,10 @@
       "total",
       "invoices"
     ],
-    "ts": 1787816216657
+    "ts": 1787819890887
   },
   {
-    "question": "Monthly trend of events",
+    "question": "Monthly trend of Events",
     "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM events GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -411,7 +411,7 @@
       "trend",
       "events"
     ],
-    "ts": 1787816587807
+    "ts": 1787819895423
   },
   {
     "question": "Total amount from subscriptions",
@@ -454,11 +454,11 @@
       "latest",
       "accounts"
     ],
-    "ts": 1787816595480
+    "ts": 1787819877229
   },
   {
     "question": "Monthly trend of projects",
-    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM projects GROUP BY month ORDER BY month DESC LIMIT 12",
+    "sql": "SELECT TO_CHAR(created_by, 'YYYY-MM') AS month, COUNT(*) AS total FROM projects GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
     "tables": [
@@ -476,7 +476,7 @@
       "trend",
       "projects"
     ],
-    "ts": 1787816367140
+    "ts": 1787819869225
   },
   {
     "question": "list admin",
@@ -563,5 +563,177 @@
       "accounts"
     ],
     "ts": 1787816607822
+  },
+  {
+    "question": "Breakdown of accounts by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM accounts GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "breakdown",
+      "accounts",
+      "status"
+    ],
+    "ts": 1787819887764
+  },
+  {
+    "question": "Total amount from invoices",
+    "sql": "SELECT SUM(amount) AS total FROM invoices",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "total",
+      "amount",
+      "invoices"
+    ],
+    "ts": 1787819879154
+  },
+  {
+    "question": "How many projects?",
+    "sql": "SELECT COUNT(*) AS total FROM projects",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "many",
+      "projects"
+    ],
+    "ts": 1787819879803
+  },
+  {
+    "question": "Monthly trend of Invoices",
+    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, SUM(amount) AS total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "monthly",
+      "trend",
+      "invoices"
+    ],
+    "ts": 1787819883313
+  },
+  {
+    "question": "How many events?",
+    "sql": "SELECT COUNT(*) AS total FROM events",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "many",
+      "events"
+    ],
+    "ts": 1787819884985
+  },
+  {
+    "question": "Latest 10 events",
+    "sql": "SELECT id, project_id, user_id, event_name, properties, session_id, device_type, browser, os, country, city, ip_address, referrer, page_url, duration_ms, created_at FROM events ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "latest",
+      "events"
+    ],
+    "ts": 1787819893442
+  },
+  {
+    "question": "Latest 10 invoices",
+    "sql": "SELECT id, account_id, subscription_id, amount, tax, total, currency, status, due_date, paid_at, invoice_number, created_at FROM invoices ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "latest",
+      "invoices"
+    ],
+    "ts": 1787819898090
+  },
+  {
+    "question": "Top 10 Invoices by amount",
+    "sql": "SELECT id, amount FROM invoices ORDER BY amount DESC LIMIT 10",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "top",
+      "invoices",
+      "amount"
+    ],
+    "ts": 1787819899900
   }
 ]
