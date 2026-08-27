@@ -217,15 +217,22 @@ YDB.NLQ = {
         this.history.push(result);
 
         if (!result.success && result.error) {
-            this._addMessage('bot-error', 'SQL Generated:\n' + (result.sql || 'None') + '\n\nError: ' + result.error);
+            this._addMessage('bot-error', result.error + (result.sql ? '\n\nGenerated SQL: ' + result.sql : ''));
             return;
         }
 
         // Build bot response HTML
         var html = '<div class="space-y-2">';
 
-        // Explanation
+        // Explanation (main answer)
         html += '<p class="text-sm font-medium text-base-content">' + YDB.UI.esc(result.explanation) + '</p>';
+
+        // Confidence badge
+        if (result.confidence) {
+            var confLevel = result.confidence >= 0.9 ? 'HIGH' : result.confidence >= 0.75 ? 'MEDIUM' : 'LOW';
+            var confColor = result.confidence >= 0.9 ? 'badge-success' : result.confidence >= 0.75 ? 'badge-warning' : 'badge-error';
+            html += '<span class="badge badge-xs ' + confColor + ' opacity-70">' + confLevel + ' confidence</span> ';
+        }
 
         // SQL (collapsible)
         html += '<details class="rounded border border-base-300 bg-base-300/30">';
@@ -236,8 +243,8 @@ YDB.NLQ = {
         // Quick stats
         html += '<div class="flex gap-2 text-xs text-base-content/70">';
         html += '<span>' + (result.rowCount || 0) + ' rows</span>';
-        if (result.duration) html += '<span>• ' + result.duration + 'ms</span>';
-        html += '<span>• ' + result.chartType + '</span>';
+        if (result.duration) html += '<span>' + result.duration + 'ms</span>';
+        html += '<span>' + result.chartType + '</span>';
         html += '</div>';
 
         // Inline result preview
@@ -247,11 +254,26 @@ YDB.NLQ = {
             html += '<div class="text-2xl font-bold text-primary">' + self._formatNumber(val) + '</div>';
             html += '</div>';
         } else if (result.data && result.data.length) {
-            // Show mini table (max 5 rows inline)
             html += self._buildMiniTable(result.columns, result.data.slice(0, 5));
             if (result.data.length > 5) {
-                html += '<button class="btn btn-xs btn-ghost text-primary nlq-view-full" data-idx="' + (self.history.length - 1) + '">View all ' + result.rowCount + ' rows →</button>';
+                html += '<button class="btn btn-xs btn-ghost text-primary nlq-view-full" data-idx="' + (self.history.length - 1) + '">View all ' + result.rowCount + ' rows</button>';
             }
+        }
+
+        // Insights
+        if (result.insights && result.insights.length > 0) {
+            html += '<div class="text-xs text-base-content/70 border-t border-base-300 pt-2 mt-2">';
+            result.insights.forEach(function (insight) { html += '<div>' + YDB.UI.esc(insight) + '</div>'; });
+            html += '</div>';
+        }
+
+        // Follow-up suggestions
+        if (result.followUps && result.followUps.length > 0) {
+            html += '<div class="flex gap-1 flex-wrap mt-2">';
+            result.followUps.forEach(function (q) {
+                html += '<button class="btn btn-xs btn-outline nlq-followup" data-q="' + self._escAttr(q) + '">' + self._truncate(q, 30) + '</button>';
+            });
+            html += '</div>';
         }
 
         html += '</div>';
@@ -262,12 +284,17 @@ YDB.NLQ = {
             this._showChart(result);
         }
 
-        // Bind "view full" buttons
+        // Bind buttons
         setTimeout(function () {
             document.querySelectorAll('.nlq-view-full').forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    var idx = parseInt(this.dataset.idx);
-                    self._showFullResults(self.history[idx]);
+                    self._showFullResults(self.history[parseInt(this.dataset.idx)]);
+                });
+            });
+            document.querySelectorAll('.nlq-followup').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.getElementById('nlq-input').value = this.dataset.q;
+                    self.ask();
                 });
             });
         }, 100);
