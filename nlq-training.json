@@ -23,7 +23,7 @@
     "ts": 1787819897208
   },
   {
-    "question": "Breakdown of projects by status",
+    "question": "Breakdown of Projects by status",
     "sql": "SELECT status, COUNT(*) AS total FROM projects GROUP BY status ORDER BY total DESC LIMIT 20",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -42,7 +42,7 @@
       "projects",
       "status"
     ],
-    "ts": 1787720853292
+    "ts": 1787821085910
   },
   {
     "question": "Breakdown of subscriptions by status",
@@ -64,7 +64,7 @@
       "subscriptions",
       "status"
     ],
-    "ts": 1787819878196
+    "ts": 1787821029263
   },
   {
     "question": "Monthly price trend from products",
@@ -113,7 +113,7 @@
       "coupons",
       "status"
     ],
-    "ts": 1787720874115
+    "ts": 1787821124940
   },
   {
     "question": "Latest 10 coupons",
@@ -207,7 +207,7 @@
       "merchants",
       "status"
     ],
-    "ts": 1787726207330
+    "ts": 1787821141005
   },
   {
     "question": "Monthly trend of reviews",
@@ -231,7 +231,7 @@
       "trend",
       "reviews"
     ],
-    "ts": 1787726211352
+    "ts": 1787821137635
   },
   {
     "question": "Breakdown of products by category",
@@ -255,7 +255,7 @@
       "products",
       "category"
     ],
-    "ts": 1787726215913
+    "ts": 1787821173906
   },
   {
     "question": "Breakdown of orders by status",
@@ -300,7 +300,7 @@
       "latest",
       "projects"
     ],
-    "ts": 1787819886099
+    "ts": 1787821084760
   },
   {
     "question": "Breakdown of Invoices by status",
@@ -322,10 +322,10 @@
       "invoices",
       "status"
     ],
-    "ts": 1787819881748
+    "ts": 1787821079727
   },
   {
-    "question": "Monthly trend of accounts",
+    "question": "Monthly trend of Accounts",
     "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM accounts GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -344,7 +344,7 @@
       "trend",
       "accounts"
     ],
-    "ts": 1787819891891
+    "ts": 1787821025312
   },
   {
     "question": "total admin",
@@ -476,10 +476,10 @@
       "trend",
       "projects"
     ],
-    "ts": 1787819869225
+    "ts": 1787821089399
   },
   {
-    "question": "list admin",
+    "question": "LIST ADMIN",
     "sql": "SELECT a.id, a.name, a.slug, a.plan, a.status, a.max_users, a.max_projects, a.billing_email, a.country, a.created_at, a.updated_at FROM accounts a LIMIT 1000",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -497,7 +497,7 @@
       "list",
       "admin"
     ],
-    "ts": 1787816374840
+    "ts": 1787821035870
   },
   {
     "question": "how many user sign up?",
@@ -584,7 +584,7 @@
       "accounts",
       "status"
     ],
-    "ts": 1787819887764
+    "ts": 1787821088157
   },
   {
     "question": "Total amount from invoices",
@@ -606,7 +606,7 @@
       "amount",
       "invoices"
     ],
-    "ts": 1787819879154
+    "ts": 1787821087429
   },
   {
     "question": "How many projects?",
@@ -649,7 +649,7 @@
       "trend",
       "invoices"
     ],
-    "ts": 1787819883313
+    "ts": 1787821081485
   },
   {
     "question": "How many events?",
@@ -712,7 +712,7 @@
       "latest",
       "invoices"
     ],
-    "ts": 1787819898090
+    "ts": 1787821083897
   },
   {
     "question": "Top 10 Invoices by amount",
@@ -735,5 +735,163 @@
       "amount"
     ],
     "ts": 1787819899900
+  },
+  {
+    "question": "LIST USER",
+    "sql": "SELECT e.user_id, COUNT(DISTINCT e.id) AS event_count FROM events e GROUP BY e.user_id LIMIT 1000",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "list",
+      "user"
+    ],
+    "ts": 1787821054705
+  },
+  {
+    "question": "show user",
+    "sql": "SELECT e.user_id, COUNT(DISTINCT e.id) AS event_count FROM events e GROUP BY e.user_id LIMIT 1000",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "show",
+      "user"
+    ],
+    "ts": 1787821103437
+  },
+  {
+    "question": "How many Invoices?",
+    "sql": "SELECT COUNT(*) AS total FROM invoices",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "many",
+      "invoices"
+    ],
+    "ts": 1787821082745
+  },
+  {
+    "question": "Total subtotal from orders",
+    "sql": "SELECT COUNT(*) AS total FROM orders",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "total",
+      "subtotal",
+      "orders"
+    ],
+    "ts": 1787821143007
+  },
+  {
+    "question": "how many user",
+    "sql": "SELECT COUNT(*) AS total FROM users",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "many",
+      "user"
+    ],
+    "ts": 1787821149750
+  },
+  {
+    "question": "Breakdown of Users by role",
+    "sql": "SELECT role, COUNT(*) AS total FROM users GROUP BY role ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "users",
+      "role"
+    ],
+    "ts": 1787821153036
+  },
+  {
+    "question": "breakdown of products by category?",
+    "sql": "SELECT category, COUNT(*) AS total FROM products GROUP BY category ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "products",
+      "category"
+    ],
+    "ts": 1787821214238
   }
 ]
