@@ -1,0 +1,567 @@
+[
+  {
+    "question": "Monthly amount trend from invoices",
+    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, SUM(amount) AS total FROM invoices GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "monthly",
+      "amount",
+      "trend",
+      "invoices"
+    ],
+    "ts": 1787816353861
+  },
+  {
+    "question": "Breakdown of projects by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM projects GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "breakdown",
+      "projects",
+      "status"
+    ],
+    "ts": 1787720853292
+  },
+  {
+    "question": "Breakdown of subscriptions by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM subscriptions GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "breakdown",
+      "subscriptions",
+      "status"
+    ],
+    "ts": 1787816590229
+  },
+  {
+    "question": "Monthly price trend from products",
+    "sql": "SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(price) AS total FROM products GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "monthly",
+      "price",
+      "trend",
+      "products"
+    ],
+    "ts": 1787726213428
+  },
+  {
+    "question": "Breakdown of coupons by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM coupons GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "coupons",
+      "status"
+    ],
+    "ts": 1787720874115
+  },
+  {
+    "question": "Latest 10 coupons",
+    "sql": "SELECT id, code, description, discount_type, discount_value, min_order_amount, max_uses, used_count, status, starts_at, expires_at, created_at FROM coupons ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "latest",
+      "coupons"
+    ],
+    "ts": 1787720875865
+  },
+  {
+    "question": "Top 10 products by price",
+    "sql": "SELECT name, price FROM products ORDER BY price DESC LIMIT 10",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "top",
+      "products",
+      "price"
+    ],
+    "ts": 1787720876852
+  },
+  {
+    "question": "How many orders?",
+    "sql": "SELECT COUNT(*) AS total FROM orders",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "many",
+      "orders"
+    ],
+    "ts": 1787726203992
+  },
+  {
+    "question": "Breakdown of merchants by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM merchants GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "merchants",
+      "status"
+    ],
+    "ts": 1787726207330
+  },
+  {
+    "question": "Monthly trend of reviews",
+    "sql": "SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS total FROM reviews GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "monthly",
+      "trend",
+      "reviews"
+    ],
+    "ts": 1787726211352
+  },
+  {
+    "question": "Breakdown of products by category",
+    "sql": "SELECT category, COUNT(*) AS total FROM products GROUP BY category ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "products",
+      "category"
+    ],
+    "ts": 1787726215913
+  },
+  {
+    "question": "Breakdown of orders by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM orders GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "breakdown",
+      "orders",
+      "status"
+    ],
+    "ts": 1787726220958
+  },
+  {
+    "question": "Latest 10 projects",
+    "sql": "SELECT id, account_id, name, description, status, daily_event_limit, created_by, created_at FROM projects ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "latest",
+      "projects"
+    ],
+    "ts": 1787816144338
+  },
+  {
+    "question": "Breakdown of invoices by status",
+    "sql": "SELECT status, COUNT(*) AS total FROM invoices GROUP BY status ORDER BY total DESC LIMIT 20",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "breakdown",
+      "invoices",
+      "status"
+    ],
+    "ts": 1787816592820
+  },
+  {
+    "question": "Monthly trend of Accounts",
+    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM accounts GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "monthly",
+      "trend",
+      "accounts"
+    ],
+    "ts": 1787816612086
+  },
+  {
+    "question": "total admin",
+    "sql": "SELECT COUNT(*) AS total FROM users",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "total",
+      "admin"
+    ],
+    "ts": 1787726446344
+  },
+  {
+    "question": "Total total from invoices",
+    "sql": "SELECT SUM(total) AS total_total FROM invoices",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "total",
+      "total",
+      "invoices"
+    ],
+    "ts": 1787816216657
+  },
+  {
+    "question": "Monthly trend of events",
+    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM events GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "monthly",
+      "trend",
+      "events"
+    ],
+    "ts": 1787816587807
+  },
+  {
+    "question": "Total amount from subscriptions",
+    "sql": "SELECT SUM(amount) AS total_amount FROM subscriptions",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "total",
+      "amount",
+      "subscriptions"
+    ],
+    "ts": 1787816407546
+  },
+  {
+    "question": "Latest 10 accounts",
+    "sql": "SELECT id, name, slug, plan, status, max_users, max_projects, billing_email, country, created_at, updated_at FROM accounts ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "latest",
+      "accounts"
+    ],
+    "ts": 1787816595480
+  },
+  {
+    "question": "Monthly trend of projects",
+    "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM projects GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "monthly",
+      "trend",
+      "projects"
+    ],
+    "ts": 1787816367140
+  },
+  {
+    "question": "list admin",
+    "sql": "SELECT a.id, a.name, a.slug, a.plan, a.status, a.max_users, a.max_projects, a.billing_email, a.country, a.created_at, a.updated_at FROM accounts a LIMIT 1000",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "list",
+      "admin"
+    ],
+    "ts": 1787816374840
+  },
+  {
+    "question": "how many user sign up?",
+    "sql": "SELECT COUNT(DISTINCT user_id) AS total_signups FROM events WHERE event_name ='signup'",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "many",
+      "user",
+      "sign"
+    ],
+    "ts": 1787816419509
+  },
+  {
+    "question": "Breakdown of Accounts by plan",
+    "sql": "SELECT plan, COUNT(*) AS total FROM accounts GROUP BY plan ORDER BY total DESC LIMIT 20",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "breakdown",
+      "accounts",
+      "plan"
+    ],
+    "ts": 1787816615676
+  },
+  {
+    "question": "How many Accounts?",
+    "sql": "SELECT COUNT(*) AS total FROM accounts",
+    "connectionId": "24",
+    "dbType": "postgresql",
+    "tables": [
+      "accounts",
+      "api_usage",
+      "dashboards",
+      "events",
+      "invoices",
+      "projects",
+      "reports",
+      "subscriptions"
+    ],
+    "keywords": [
+      "many",
+      "accounts"
+    ],
+    "ts": 1787816607822
+  }
+]

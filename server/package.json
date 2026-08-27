@@ -14,6 +14,7 @@
     "test:ci": "jest --coverage --forceExit --ci --reporters=default"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1119.0",
     "@aws-sdk/client-dynamodb": "^3.665.0",
     "@aws-sdk/util-dynamodb": "^3.665.0",
     "@clickhouse/client": "^1.4.1",
