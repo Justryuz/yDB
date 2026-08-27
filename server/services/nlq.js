@@ -64,20 +64,20 @@ const METRIC_CATALOG = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const INTENT_PATTERNS = {
-    count: /\b(how many|count|total number|number of)\b/i,
-    sum: /\b(total amount|total sales|total revenue|total deposit|total value|sum of|gross|net total)\b|how much.*(revenue|sales|deposit|money|amount|earn|spend|paid|cost)/i,
-    average: /\b(average|avg|mean|typical)\b/i,
-    maximum: /\b(maximum|highest|largest|biggest|most expensive)\b/i,
-    minimum: /\b(minimum|lowest|smallest|cheapest)\b/i,
-    trend: /\b(trend|monthly|daily|weekly|over time|growth|per day|per week|per month|per year)\b/i,
-    breakdown: /\b(breakdown|group by|by status|by type|by category|by role|distribution|segment)\b/i,
-    topN: /\b(top|best|leading|biggest|most|teratas)\b/i,
-    bottomN: /\b(bottom|worst|least|fewest|lowest)\b/i,
-    comparison: /\b(compare|versus|vs|difference|growth|decline|change)\b/i,
-    list: /\b(list|show|display|all|view)\b/i,
-    recent: /\b(recent|latest|newest|last)\b/i,
-    search: /\b(find|search|look for|locate)\b/i,
-    greeting: /^\s*(hi|hello|hey|morning|good morning|good afternoon|assalamualaikum|salam)\b/i,
+    count: /\b(how many|count|total number|number of|berapa|jumlah rekod)\b/i,
+    sum: /\b(total amount|total sales|total revenue|total deposit|total value|sum of|jumlah nilai|jumlah bayaran|gross|net total)\b|how much.*(revenue|sales|deposit|money|amount|earn|spend|paid|cost)/i,
+    average: /\b(average|avg|mean|typical|purata)\b/i,
+    maximum: /\b(maximum|highest|largest|biggest|most expensive|tertinggi|paling tinggi)\b/i,
+    minimum: /\b(minimum|lowest|smallest|cheapest|terendah|paling rendah)\b/i,
+    trend: /\b(trend|monthly|daily|weekly|over time|growth|per day|per week|per month|per year|bulanan|harian|mingguan)\b/i,
+    breakdown: /\b(breakdown|group by|by status|by type|by category|by role|distribution|segment|pecahan|mengikut)\b/i,
+    topN: /\b(top|best|leading|biggest|most|teratas|paling banyak)\b/i,
+    bottomN: /\b(bottom|worst|least|fewest|lowest|terendah)\b/i,
+    comparison: /\b(compare|versus|vs|difference|growth|decline|change|bandingkan|banding)\b/i,
+    list: /\b(list|show|display|all|view|senarai|tunjuk|papar)\b/i,
+    recent: /\b(recent|latest|newest|last|terkini|terbaru)\b/i,
+    search: /\b(find|search|look for|locate|cari)\b/i,
+    greeting: /^\s*(hi|hello|hey|morning|good morning|good afternoon|assalamualaikum|salam|selamat pagi|selamat petang)\b/i,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -85,15 +85,15 @@ const INTENT_PATTERNS = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TIME_EXPRESSIONS = {
-    today: { pattern: /\btoday\b/i, mysql: (c) => `DATE(${c}) = CURDATE()`, pg: (c) => `DATE(${c}) = CURRENT_DATE` },
-    yesterday: { pattern: /\byesterday\b/i, mysql: (c) => `DATE(${c}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, pg: (c) => `DATE(${c}) = CURRENT_DATE - 1` },
-    this_week: { pattern: /\bthis\s*week\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE)` },
-    last_week: { pattern: /\blast\s*week\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE())+7) DAY) AND ${c} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${c} < DATE_TRUNC('week', CURRENT_DATE)` },
+    today: { pattern: /\\btoday\\b|\\bhari ini\\b/i, mysql: (c) => `DATE(${c}) = CURDATE()`, pg: (c) => `DATE(${c}) = CURRENT_DATE` },
+    yesterday: { pattern: /\\byesterday\\b|\\bsemalam\\b/i, mysql: (c) => `DATE(${c}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, pg: (c) => `DATE(${c}) = CURRENT_DATE - 1` },
+    this_week: { pattern: /\\bthis\\s*week\\b|\\bminggu ini\\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE)` },
+    last_week: { pattern: /\\blast\\s*week\\b|\\bminggu lepas\\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL (WEEKDAY(CURDATE())+7) DAY) AND ${c} < DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)`, pg: (c) => `${c} >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '7 days' AND ${c} < DATE_TRUNC('week', CURRENT_DATE)` },
     this_month: { pattern: /\bthis\s*month\b|\bmtd\b/i, mysql: (c) => `${c} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE)` },
     last_month: { pattern: /\blast\s*month\b/i, mysql: (c) => `${c} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${c} < DATE_FORMAT(CURDATE(), '%Y-%m-01')`, pg: (c) => `${c} >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month' AND ${c} < DATE_TRUNC('month', CURRENT_DATE)` },
     this_quarter: { pattern: /\bthis\s*quarter\b|\bqtd\b/i, mysql: (c) => `QUARTER(${c}) = QUARTER(CURDATE()) AND YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `${c} >= DATE_TRUNC('quarter', CURRENT_DATE)` },
     last_quarter: { pattern: /\blast\s*quarter\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '3 months'` },
-    this_year: { pattern: /\bthis\s*year\b|\bytd\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE)` },
+    this_year: { pattern: /\\bthis\\s*year\\b|\\btahun ini\\b|\\bytd\\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE())`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE)` },
     last_year: { pattern: /\blast\s*year\b/i, mysql: (c) => `YEAR(${c}) = YEAR(CURDATE()) - 1`, pg: (c) => `EXTRACT(YEAR FROM ${c}) = EXTRACT(YEAR FROM CURRENT_DATE) - 1` },
     last_7_days: { pattern: /\blast\s*7\s*days\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '7 days'` },
     last_30_days: { pattern: /\blast\s*30\s*days\b/i, mysql: (c) => `${c} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`, pg: (c) => `${c} >= CURRENT_DATE - INTERVAL '30 days'` },
