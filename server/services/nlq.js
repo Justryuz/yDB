@@ -734,7 +734,16 @@ USER QUESTION: "${question}"`;
             if (bearerToken) {
                 // Use Bearer Token authentication (short-term API key from Amazon Q)
                 const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/invoke`;
-                const body = JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] });
+
+                // Build request body based on model provider
+                let body;
+                if (model.startsWith('anthropic.') || model.includes('claude')) {
+                    body = JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] });
+                } else {
+                    // Amazon Nova / Titan format
+                    body = JSON.stringify({ messages: [{ role: 'user', content: [{ text: prompt }] }], inferenceConfig: { maxTokens: 1024, temperature: 0.1 } });
+                }
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${bearerToken}`, 'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD' },
@@ -745,7 +754,17 @@ USER QUESTION: "${question}"`;
                     throw new Error(`Bedrock ${response.status}: ${err.substring(0, 200)}`);
                 }
                 const data = await response.json();
-                return this._parseAIResponse(data.content?.[0]?.text || '');
+
+                // Parse response based on model
+                let text = '';
+                if (data.content && data.content[0]?.text) {
+                    text = data.content[0].text; // Claude format
+                } else if (data.output?.message?.content?.[0]?.text) {
+                    text = data.output.message.content[0].text; // Nova format
+                } else if (data.results?.[0]?.outputText) {
+                    text = data.results[0].outputText; // Titan format
+                }
+                return this._parseAIResponse(text);
             } else {
                 // Use standard AWS SDK credentials (IAM)
                 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
