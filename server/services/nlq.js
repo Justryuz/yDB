@@ -641,16 +641,30 @@ class NLQEngine {
     async generateSQL(opts) {
         const { question, schema, dbType, userId, connectionId } = opts;
 
-        // Use LLM pipeline if configured (with vector retrieval + full DDL context)
-        if (config.nlq && config.nlq.provider !== 'builtin') {
-            return await this._llmPipeline(question, schema, dbType, connectionId);
-        }
-
-        // Builtin heuristic (instant, no API needed)
+        // Hybrid mode: builtin first, LLM as fallback for low confidence / errors
         const si = new SchemaIntelligence(schema, dbType);
         const planner = new QueryPlanner(question, si, dbType);
         const plan = planner.buildPlan();
-        return { sql: plan.sql || '', explanation: plan.explanation || '', chartType: plan.chartType || 'table', confidence: plan.confidence || 0.5, followUps: plan.followUps || [] };
+
+        // If builtin confidence is high enough, use it (instant)
+        if (plan.confidence >= 0.85 || !config.nlq?.provider || config.nlq.provider === 'builtin') {
+            return { sql: plan.sql || '', explanation: plan.explanation || '', chartType: plan.chartType || 'table', confidence: plan.confidence || 0.5, followUps: plan.followUps || [], provider: 'builtin' };
+        }
+
+        // Low confidence — escalate to LLM for better accuracy
+        try {
+            const llmResult = await this._llmPipeline(question, schema, dbType, connectionId);
+            if (llmResult.sql) {
+                llmResult.provider = 'llm';
+                llmResult.confidence = llmResult.confidence || 0.95;
+                return llmResult;
+            }
+        } catch (e) {
+            console.error('[NLQ] LLM fallback failed:', e.message);
+        }
+
+        // LLM failed — return builtin result anyway
+        return { sql: plan.sql || '', explanation: plan.explanation || '', chartType: plan.chartType || 'table', confidence: plan.confidence || 0.5, followUps: plan.followUps || [], provider: 'builtin' };
     }
 
     /**
