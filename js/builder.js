@@ -5,6 +5,7 @@ YDB.Builder = {
     init: function () {
         var self = this;
         document.getElementById('btn-generate-run').addEventListener('click', function () { self.generateAndRun(); });
+        document.getElementById('btn-ai-suggest-join').addEventListener('click', function () { self.aiSuggestJoin(); });
         document.getElementById('btn-clear-canvas').addEventListener('click', function () { self.clearCanvas(); });
         document.getElementById('btn-zoom-in').addEventListener('click', function () { self.zoom(YDB.Config.ZOOM_STEP); });
         document.getElementById('btn-zoom-out').addEventListener('click', function () { self.zoom(-YDB.Config.ZOOM_STEP); });
@@ -393,6 +394,62 @@ YDB.Builder = {
     },
 
     dismissSuggestion: function () { YDB.State.pendingSuggestions = null; var el = document.getElementById('join-suggestion'); if (el) el.remove(); },
+
+    /**
+     * AI-powered join suggestion — analyzes all tables on canvas and suggests relationships.
+     */
+    aiSuggestJoin: function () {
+        var conn = YDB.State.activeConnection;
+        if (!conn) { YDB.UI.toast('Select a connection first', 'warning'); return; }
+        if (!YDB.API.isOnline() || !YDB.API.token) { YDB.UI.toast('Backend not available', 'error'); return; }
+
+        var tables = YDB.State.canvasTables;
+        if (!tables || tables.length < 2) { YDB.UI.toast('Drop at least 2 tables to suggest joins', 'info'); return; }
+
+        YDB.UI.toast('AI analyzing relationships...', 'info');
+
+        YDB.API.post('/ai/suggest-joins', { connectionId: conn.id }).then(function (data) {
+            var suggestions = (data.suggestions || []).filter(function (s) {
+                // Only show suggestions for tables currently on canvas
+                var canvasNames = tables.map(function (t) { return t.name; });
+                var fromTable = s.from.split('.')[0];
+                var toTable = s.to.split('.')[0];
+                return canvasNames.includes(fromTable) && canvasNames.includes(toTable);
+            });
+
+            if (suggestions.length === 0) {
+                YDB.UI.toast('No relationships detected between canvas tables', 'info');
+                return;
+            }
+
+            // Convert to builder suggestion format
+            var builderSugs = suggestions.map(function (s) {
+                var fromParts = s.from.split('.');
+                var toParts = s.to.split('.');
+                var leftTable = tables.find(function (t) { return t.name === fromParts[0]; });
+                var rightTable = tables.find(function (t) { return t.name === toParts[0]; });
+                return {
+                    leftId: leftTable ? leftTable.id : null,
+                    leftName: fromParts[0],
+                    leftCol: fromParts[1],
+                    rightId: rightTable ? rightTable.id : null,
+                    rightName: toParts[0],
+                    rightCol: toParts[1],
+                    confidence: s.confidence,
+                    reason: s.reason
+                };
+            }).filter(function (s) { return s.leftId && s.rightId; });
+
+            if (builderSugs.length > 0) {
+                YDB.Builder._showSuggestions(builderSugs);
+                YDB.UI.toast('AI found ' + builderSugs.length + ' relationship(s)', 'success');
+            } else {
+                YDB.UI.toast('No joinable relationships found', 'info');
+            }
+        }).catch(function (err) {
+            YDB.UI.toast('AI analysis failed: ' + err.message, 'error');
+        });
+    },
 
     _autoSelectCols: function (tableId) {
         var ct = YDB.State.canvasTables.find(function (t) { return t.id === tableId; });

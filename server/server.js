@@ -60,6 +60,121 @@ app.use('/api/stream', require('./routes/stream'));
 app.use('/api/federated', require('./routes/federated'));
 app.use('/api/nlq', require('./routes/nlq'));
 
+// AI JOIN suggestions
+const aiJoins = require('./services/ai-joins');
+app.post('/api/ai/suggest-joins', authenticate, async (req, res) => {
+    try {
+        const { connectionId, tables } = req.body;
+        if (!connectionId) return res.status(400).json({ error: 'connectionId required' });
+
+        const db2 = require('./db/pool');
+        const connResult = await db2.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, req.user.id]);
+        if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
+
+        const conn = connResult.rows[0];
+        const crypto = require('crypto');
+        let password = '';
+        try {
+            if (conn.password_encrypted) {
+                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+                const [ivHex, encrypted] = conn.password_encrypted.split(':');
+                const iv = Buffer.from(ivHex, 'hex');
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+            }
+        } catch (e) {}
+
+        const options = conn.options || {};
+        const { opts, cleanup } = await require('./services/ssh-tunnel').withTunnel(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
+            options.ssh
+        );
+
+        const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+        const schema = await adapter.getSchema();
+        cleanup();
+
+        const suggestions = aiJoins.detectAllRelationships(schema);
+        res.json({ suggestions, tableCount: Object.keys(schema.tables || {}).length });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/ai/natural-join', authenticate, async (req, res) => {
+    try {
+        const { connectionId, query } = req.body;
+        if (!connectionId || !query) return res.status(400).json({ error: 'connectionId and query required' });
+
+        const db2 = require('./db/pool');
+        const connResult = await db2.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, req.user.id]);
+        if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
+
+        const conn = connResult.rows[0];
+        const crypto = require('crypto');
+        let password = '';
+        try {
+            if (conn.password_encrypted) {
+                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+                const [ivHex, encrypted] = conn.password_encrypted.split(':');
+                const iv = Buffer.from(ivHex, 'hex');
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+            }
+        } catch (e) {}
+
+        const options = conn.options || {};
+        const { opts, cleanup } = await require('./services/ssh-tunnel').withTunnel(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
+            options.ssh
+        );
+
+        const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+        const schema = await adapter.getSchema();
+        cleanup();
+
+        const result = aiJoins.parseNaturalJoin(query, schema);
+        res.json(result || { error: 'Could not parse join request. Try: "join users with orders"' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/ai/compatible-columns', authenticate, async (req, res) => {
+    try {
+        const { connectionId, tableA, tableB } = req.body;
+        if (!connectionId || !tableA || !tableB) return res.status(400).json({ error: 'connectionId, tableA, tableB required' });
+
+        const db2 = require('./db/pool');
+        const connResult = await db2.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, req.user.id]);
+        if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
+
+        const conn = connResult.rows[0];
+        const crypto = require('crypto');
+        let password = '';
+        try {
+            if (conn.password_encrypted) {
+                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+                const [ivHex, encrypted] = conn.password_encrypted.split(':');
+                const iv = Buffer.from(ivHex, 'hex');
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+            }
+        } catch (e) {}
+
+        const options = conn.options || {};
+        const { opts, cleanup } = await require('./services/ssh-tunnel').withTunnel(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
+            options.ssh
+        );
+
+        const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+        const schema = await adapter.getSchema();
+        cleanup();
+
+        const tA = { name: tableA, columns: schema.tables[tableA]?.columns || [] };
+        const tB = { name: tableB, columns: schema.tables[tableB]?.columns || [] };
+        const matches = aiJoins.findCompatibleColumns(tA, tB);
+        res.json({ matches, tableA, tableB });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Pool stats (admin only)
 const { authenticate, authorize } = require('./middleware/auth');
 const poolManager = require('./services/pool-manager');
