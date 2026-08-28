@@ -280,6 +280,74 @@ async function _getConnectionInfo(connectionId, userId) {
     return result.rows[0] || null;
 }
 
+// AI Schema Compare
+const schemaCompare = require('./services/schema-compare');
+app.post('/api/ai/schema-compare', authenticate, async (req, res) => {
+    try {
+        const { sourceConnectionId, targetConnectionId } = req.body;
+        if (!sourceConnectionId || !targetConnectionId) return res.status(400).json({ error: 'sourceConnectionId and targetConnectionId required' });
+
+        const schemaA = await _getSchemaForConnection(req.user.id, sourceConnectionId);
+        const schemaB = await _getSchemaForConnection(req.user.id, targetConnectionId);
+        const connB = await _getConnectionInfo(targetConnectionId, req.user.id);
+
+        const result = schemaCompare.compareSchemas(schemaA, schemaB, connB?.db_type || 'mysql');
+        res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// AI API Test Generator
+app.post('/api/ai/api-test-generate', authenticate, async (req, res) => {
+    try {
+        const { method, url, description } = req.body;
+        if (!url) return res.status(400).json({ error: 'url required' });
+
+        // Generate test request based on URL pattern and method
+        const tests = generateAPITests(method || 'GET', url, description || '');
+        res.json({ tests });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+function generateAPITests(method, url, description) {
+    const tests = [];
+    const path = new URL(url, 'http://localhost').pathname;
+
+    // Base request
+    tests.push({ name: 'Basic Request', method, url, headers: { 'Content-Type': 'application/json' }, body: null, expected: '200 OK' });
+
+    // Auth test
+    tests.push({ name: 'Without Auth (should fail)', method, url, headers: {}, body: null, expected: '401 Unauthorized' });
+
+    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+        // Generate sample body based on URL
+        let sampleBody = {};
+        if (/user/i.test(path)) sampleBody = { username: 'test_user', email: 'test@example.com', role: 'viewer' };
+        else if (/order/i.test(path)) sampleBody = { product_id: 1, quantity: 2, amount: 99.90 };
+        else if (/product/i.test(path)) sampleBody = { name: 'Test Product', price: 29.99, category: 'General' };
+        else if (/transaction|payment/i.test(path)) sampleBody = { amount: 100.00, currency: 'MYR', status: 'pending' };
+        else sampleBody = { name: 'Test', value: 'sample' };
+
+        tests.push({ name: 'With Valid Body', method, url, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sampleBody, null, 2), expected: '201 Created' });
+        tests.push({ name: 'With Empty Body (should fail)', method, url, headers: { 'Content-Type': 'application/json' }, body: '{}', expected: '400 Bad Request' });
+        tests.push({ name: 'With Invalid JSON', method, url, headers: { 'Content-Type': 'application/json' }, body: '{invalid', expected: '400 Bad Request' });
+    }
+
+    if (method === 'GET') {
+        // Pagination test
+        tests.push({ name: 'With Pagination', method, url: url + (url.includes('?') ? '&' : '?') + 'page=1&perPage=10', headers: { 'Content-Type': 'application/json' }, body: null, expected: '200 OK' });
+        // Search test
+        if (/list|all|index/i.test(path) || path.endsWith('s')) {
+            tests.push({ name: 'With Search Filter', method, url: url + (url.includes('?') ? '&' : '?') + 'search=test', headers: { 'Content-Type': 'application/json' }, body: null, expected: '200 OK' });
+        }
+    }
+
+    if (method === 'DELETE') {
+        tests.push({ name: 'Delete Non-Existent (should 404)', method, url: url + '/99999', headers: { 'Content-Type': 'application/json' }, body: null, expected: '404 Not Found' });
+    }
+
+    return tests;
+}
+
 // AI Data Quality Scanner
 app.post('/api/ai/data-quality', authenticate, async (req, res) => {
     try {

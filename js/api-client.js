@@ -15,6 +15,9 @@ YDB.APIClient = {
         // Send button
         document.getElementById('btn-api-send').addEventListener('click', function () { self.send(); });
 
+        // AI Generate Tests button
+        document.getElementById('btn-api-ai-tests').addEventListener('click', function () { self.aiGenerateTests(); });
+
         // Save button
         document.getElementById('btn-api-save').addEventListener('click', function () { self.saveRequest(); });
 
@@ -246,5 +249,28 @@ YDB.APIClient = {
     },
 
     _load: function () { var d = localStorage.getItem('ydb-api-collections'); this.collections = d ? JSON.parse(d) : []; },
-    _save: function () { localStorage.setItem('ydb-api-collections', JSON.stringify(this.collections)); }
+    _save: function () { localStorage.setItem('ydb-api-collections', JSON.stringify(this.collections)); },
+
+    aiGenerateTests: function () {
+        var method = document.getElementById('api-method').value;
+        var url = document.getElementById('api-url').value.trim();
+        if (!url) { YDB.UI.toast('Enter a URL first', 'warning'); return; }
+
+        YDB.UI.toast('Generating test cases...', 'info');
+        YDB.API.post('/ai/api-test-generate', { method: method, url: url }).then(function (data) {
+            var tests = data.tests || [];
+            var el = document.getElementById('api-response');
+            var h = 'Generated ' + tests.length + ' test cases:\n\n';
+            tests.forEach(function (t, i) {
+                h += '── Test ' + (i + 1) + ': ' + t.name + ' ──\n';
+                h += t.method + ' ' + t.url + '\n';
+                if (t.body) h += 'Body: ' + t.body + '\n';
+                h += 'Expected: ' + t.expected + '\n\n';
+            });
+            el.textContent = h;
+            document.getElementById('api-res-status').textContent = tests.length + ' tests';
+            document.getElementById('api-res-status').className = 'badge badge-sm badge-success';
+            YDB.UI.toast('Generated ' + tests.length + ' test cases', 'success');
+        }).catch(function (err) { YDB.UI.toast('Failed: ' + err.message, 'error'); });
+    }
 };

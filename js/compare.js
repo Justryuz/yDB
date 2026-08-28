@@ -87,8 +87,42 @@ YDB.Compare = {
         });
         h += '</div>';
         h += '<div class="mt-3 text-xs text-base-content/50">' + results.length + ' tables compared</div>';
+
+        // AI Migration SQL button
+        var leftId = document.getElementById('compare-left').value;
+        var rightId = document.getElementById('compare-right').value;
+        var hasDiffs = results.some(function (r) { return r.status !== 'identical'; });
+        if (hasDiffs && YDB.API.isOnline()) {
+            h += '<button class="btn btn-primary btn-sm mt-3" onclick="YDB.Compare.generateMigration()">Generate Migration SQL</button>';
+        }
+
         el.innerHTML = h;
         YDB.UI.icons();
         YDB.UI.toast('Comparison complete', 'success');
+    },
+
+    generateMigration: function () {
+        var leftId = document.getElementById('compare-left').value;
+        var rightId = document.getElementById('compare-right').value;
+        if (!leftId || !rightId) return;
+
+        YDB.UI.toast('Generating migration SQL...', 'info');
+        YDB.API.post('/ai/schema-compare', { sourceConnectionId: parseInt(leftId), targetConnectionId: parseInt(rightId) }).then(function (result) {
+            var el = document.getElementById('compare-results');
+            var h = el.innerHTML;
+            h += '<div class="mt-4 bg-base-200 rounded-lg p-4">';
+            h += '<div class="font-semibold text-sm mb-2">Migration SQL (' + result.migrationSQL.length + ' statements)</div>';
+            h += '<div class="text-xs text-base-content/70 mb-3">' + result.summary + '</div>';
+            if (result.migrationSQL.length > 0) {
+                h += '<pre class="bg-base-300 rounded p-3 text-xs font-mono text-success whitespace-pre-wrap max-h-64 overflow-auto">';
+                h += result.migrationSQL.join('\n\n');
+                h += '</pre>';
+                h += '<button class="btn btn-sm btn-primary mt-2" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Copied to SQL Editor\',\'success\');document.querySelector(\'[data-tab=editor]\').click()" data-sql="' + result.migrationSQL.join('\n').replace(/"/g, '&quot;') + '">Copy to SQL Editor</button>';
+            } else {
+                h += '<div class="text-success text-sm">Schemas are identical. No migration needed.</div>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+        }).catch(function (err) { YDB.UI.toast('Migration generation failed: ' + err.message, 'error'); });
     }
 };
