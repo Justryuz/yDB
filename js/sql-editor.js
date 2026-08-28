@@ -189,11 +189,11 @@ YDB.SQLEditor = {
         h += '<div class="font-semibold text-primary text-sm mb-2">AI Generate SQL</div>';
         h += '<div class="flex gap-2 mb-2"><input type="text" id="ai-gen-input" class="input input-sm input-bordered flex-1" placeholder="Describe what you want... e.g. show top 10 users by revenue"><button class="btn btn-primary btn-sm" onclick="YDB.SQLEditor._doGenerate()">Generate</button></div>';
         h += '<div class="flex gap-1 flex-wrap text-xs">';
-        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Show all users</button>';
-        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Count records per status</button>';
-        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Monthly trend</button>';
-        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Top 10 by amount</button>';
-        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Find duplicates</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=\'Show all users\';YDB.SQLEditor._doGenerate()">Show all users</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=\'Count records per status\';YDB.SQLEditor._doGenerate()">Count per status</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=\'Monthly trend\';YDB.SQLEditor._doGenerate()">Monthly trend</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=\'Top 10 by amount\';YDB.SQLEditor._doGenerate()">Top 10 by amount</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=\'Find duplicates\';YDB.SQLEditor._doGenerate()">Find duplicates</button>';
         h += '</div></div>';
         el.innerHTML = h;
 
