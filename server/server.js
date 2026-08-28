@@ -15,6 +15,10 @@ const config = require('./config'); // Will exit(1) if secrets are missing
 
 const app = express();
 
+// ── Auth middleware (used across routes) ──────────────────
+const { authenticate, authorize } = require('./middleware/auth');
+const poolManager = require('./services/pool-manager');
+
 // ── Security & Middleware ──────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -176,8 +180,6 @@ app.post('/api/ai/compatible-columns', authenticate, async (req, res) => {
 });
 
 // Pool stats (admin only)
-const { authenticate, authorize } = require('./middleware/auth');
-const poolManager = require('./services/pool-manager');
 app.get('/api/pool/stats', authenticate, authorize('admin'), (req, res) => {
     res.json(poolManager.getStats());
 });

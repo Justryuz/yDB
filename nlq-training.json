@@ -23,7 +23,7 @@
     "ts": 1787819897208
   },
   {
-    "question": "Breakdown of Projects by status",
+    "question": "Breakdown of projects by status",
     "sql": "SELECT status, COUNT(*) AS total FROM projects GROUP BY status ORDER BY total DESC LIMIT 20",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -42,7 +42,7 @@
       "projects",
       "status"
     ],
-    "ts": 1787821085910
+    "ts": 1787921937630
   },
   {
     "question": "Breakdown of subscriptions by status",
@@ -325,7 +325,7 @@
     "ts": 1787821079727
   },
   {
-    "question": "Monthly trend of Accounts",
+    "question": "Monthly trend of accounts",
     "sql": "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COUNT(*) AS total FROM accounts GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -344,7 +344,7 @@
       "trend",
       "accounts"
     ],
-    "ts": 1787821025312
+    "ts": 1787822288925
   },
   {
     "question": "total admin",
@@ -457,7 +457,7 @@
     "ts": 1787819877229
   },
   {
-    "question": "Monthly trend of projects",
+    "question": "Monthly trend of Projects",
     "sql": "SELECT TO_CHAR(created_by, 'YYYY-MM') AS month, COUNT(*) AS total FROM projects GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -476,7 +476,7 @@
       "trend",
       "projects"
     ],
-    "ts": 1787821089399
+    "ts": 1787921950733
   },
   {
     "question": "LIST ADMIN",
@@ -541,10 +541,10 @@
       "accounts",
       "plan"
     ],
-    "ts": 1787816615676
+    "ts": 1787822275700
   },
   {
-    "question": "How many Accounts?",
+    "question": "How many accounts?",
     "sql": "SELECT COUNT(*) AS total FROM accounts",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -562,7 +562,7 @@
       "many",
       "accounts"
     ],
-    "ts": 1787816607822
+    "ts": 1787822265297
   },
   {
     "question": "Breakdown of accounts by status",
@@ -893,5 +893,77 @@
       "category"
     ],
     "ts": 1787821214238
+  },
+  {
+    "question": "Monthly discount_value trend from coupons",
+    "sql": "SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(discount_type) AS total FROM coupons GROUP BY month ORDER BY month DESC LIMIT 12",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "monthly",
+      "discount_value",
+      "trend",
+      "coupons"
+    ],
+    "ts": 1787822301519
+  },
+  {
+    "question": "how many user here",
+    "sql": "SELECT COUNT(*) AS total FROM users",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "many",
+      "user",
+      "here"
+    ],
+    "ts": 1787822333639
+  },
+  {
+    "question": "Latest 10 Users",
+    "sql": "SELECT id, username, email, first_name, last_name, phone, avatar_url, role, status, email_verified, last_login, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT 10",
+    "connectionId": "21",
+    "dbType": "mysql",
+    "tables": [
+      "activity_logs",
+      "coupons",
+      "merchants",
+      "order_items",
+      "orders",
+      "products",
+      "reviews",
+      "transactions",
+      "users",
+      "wallets"
+    ],
+    "keywords": [
+      "latest",
+      "users"
+    ],
+    "ts": 1787822361820
   }
 ]
