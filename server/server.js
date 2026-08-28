@@ -179,6 +179,107 @@ app.post('/api/ai/compatible-columns', authenticate, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// SQL AI Assistant endpoints
+const SQLAssistant = require('./services/sql-assistant');
+app.post('/api/ai/sql-fix', authenticate, async (req, res) => {
+    try {
+        const { connectionId, sql, error } = req.body;
+        if (!sql || !error) return res.status(400).json({ error: 'sql and error required' });
+
+        const schema = await _getSchemaForConnection(req.user.id, connectionId);
+        const conn = await _getConnectionInfo(connectionId, req.user.id);
+        const assistant = new SQLAssistant(schema, conn?.db_type || 'mysql');
+        const result = await assistant.fix(sql, error);
+        res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/ai/sql-explain', authenticate, async (req, res) => {
+    try {
+        const { connectionId, sql } = req.body;
+        if (!sql) return res.status(400).json({ error: 'sql required' });
+
+        const schema = await _getSchemaForConnection(req.user.id, connectionId);
+        const conn = await _getConnectionInfo(connectionId, req.user.id);
+        const assistant = new SQLAssistant(schema, conn?.db_type || 'mysql');
+        const result = await assistant.explain(sql);
+        res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/ai/sql-optimize', authenticate, async (req, res) => {
+    try {
+        const { connectionId, sql } = req.body;
+        if (!sql) return res.status(400).json({ error: 'sql required' });
+
+        const schema = await _getSchemaForConnection(req.user.id, connectionId);
+        const conn = await _getConnectionInfo(connectionId, req.user.id);
+        const assistant = new SQLAssistant(schema, conn?.db_type || 'mysql');
+        const result = await assistant.optimize(sql);
+        res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/ai/sql-generate', authenticate, async (req, res) => {
+    try {
+        const { connectionId, description } = req.body;
+        if (!description) return res.status(400).json({ error: 'description required' });
+
+        const schema = await _getSchemaForConnection(req.user.id, connectionId);
+        const conn = await _getConnectionInfo(connectionId, req.user.id);
+        const assistant = new SQLAssistant(schema, conn?.db_type || 'mysql');
+        const result = await assistant.generate(description);
+        res.json(result);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Helper: get schema for a connection
+async function _getSchemaForConnection(userId, connectionId) {
+    if (!connectionId) return { tables: {} };
+    const { SchemaCache: schemaCache } = require('./services/nlq');
+    let schema = schemaCache.get(connectionId);
+    if (schema) return schema;
+
+    const db2 = require('./db/pool');
+    const connResult = await db2.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, userId]);
+    if (!connResult.rows.length) return { tables: {} };
+
+    const conn = connResult.rows[0];
+    const crypto = require('crypto');
+    let password = '';
+    try {
+        if (conn.password_encrypted) {
+            const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+            const [ivHex, encrypted] = conn.password_encrypted.split(':');
+            const iv = Buffer.from(ivHex, 'hex');
+            const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+            password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+        }
+    } catch (e) {}
+
+    const options = conn.options || {};
+    const { withTunnel } = require('./services/ssh-tunnel');
+    const { opts, cleanup } = await withTunnel(
+        { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
+        options.ssh
+    );
+    try {
+        const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+        schema = await adapter.getSchema();
+        schemaCache.set(connectionId, schema);
+        cleanup();
+        return schema;
+    } catch (e) { cleanup(); return { tables: {} }; }
+}
+
+// Helper: get connection info
+async function _getConnectionInfo(connectionId, userId) {
+    if (!connectionId) return null;
+    const db2 = require('./db/pool');
+    const result = await db2.query('SELECT db_type FROM connections WHERE id = $1 AND user_id = $2', [connectionId, userId]);
+    return result.rows[0] || null;
+}
+
 // Pool stats (admin only)
 app.get('/api/pool/stats', authenticate, authorize('admin'), (req, res) => {
     res.json(poolManager.getStats());

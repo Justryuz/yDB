@@ -6,6 +6,9 @@ YDB.SQLEditor = {
         var self = this;
         document.getElementById('btn-exec-sql').addEventListener('click', function () { self.execute(); });
         document.getElementById('btn-format-sql').addEventListener('click', function () { self.format(); });
+        document.getElementById('btn-ai-explain').addEventListener('click', function () { self.aiExplain(); });
+        document.getElementById('btn-ai-optimize').addEventListener('click', function () { self.aiOptimize(); });
+        document.getElementById('btn-ai-generate').addEventListener('click', function () { self.aiGenerate(); });
         document.getElementById('btn-add-tab').addEventListener('click', function () { self.addTab(); });
         document.getElementById('sql-input').addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); self.execute(); }
@@ -56,7 +59,11 @@ YDB.SQLEditor = {
                     YDB.UI.toast('Executed: ' + result.rowCount + ' rows in ' + result.duration + 'ms', 'success');
                 })
                 .catch(function (err) {
-                    container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>';
+                    container.innerHTML = '<div class="bg-error/10 border border-error/30 rounded-lg p-3 m-2 text-sm">'
+                        + '<div class="text-error font-medium mb-1">' + err.message + '</div>'
+                        + '<button class="btn btn-sm btn-outline btn-primary mt-1" onclick="YDB.SQLEditor.aiFix(document.getElementById(\'sql-input\').value, \'' + err.message.replace(/'/g, "\\'") + '\')"><i data-lucide="sparkles" class="w-3 h-3"></i> AI Fix</button>'
+                        + '</div>';
+                    YDB.UI.icons();
                 });
         } else {
             // Fallback to mock query engine
@@ -110,5 +117,87 @@ YDB.SQLEditor = {
         el.querySelectorAll('[data-etab]').forEach(function (btn) {
             btn.addEventListener('click', function () { self._switchTab(parseInt(this.dataset.etab)); });
         });
+    },
+
+    // ── AI SQL Assistant ──
+
+    aiExplain: function () {
+        var sql = document.getElementById('sql-input').value.trim();
+        if (!sql) { YDB.UI.toast('Enter SQL to explain', 'warning'); return; }
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+
+        YDB.UI.toast('AI analyzing query...', 'info');
+        YDB.API.post('/ai/sql-explain', { connectionId: connId, sql: sql }).then(function (result) {
+            var el = document.getElementById('sql-results');
+            el.innerHTML = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">'
+                + '<div class="font-semibold text-primary mb-2">AI Explanation</div>'
+                + '<div class="text-base-content/90">' + (result.explanation || 'No explanation available.') + '</div>'
+                + '</div>';
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
+    },
+
+    aiOptimize: function () {
+        var sql = document.getElementById('sql-input').value.trim();
+        if (!sql) { YDB.UI.toast('Enter SQL to optimize', 'warning'); return; }
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+
+        YDB.UI.toast('AI optimizing query...', 'info');
+        YDB.API.post('/ai/sql-optimize', { connectionId: connId, sql: sql }).then(function (result) {
+            var el = document.getElementById('sql-results');
+            var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
+            h += '<div class="font-semibold text-primary mb-2">AI Optimization</div>';
+            if (result.sql && result.sql !== sql) {
+                h += '<div class="text-xs text-base-content/60 mb-1">Optimized SQL:</div>';
+                h += '<pre class="bg-base-300 rounded p-2 text-xs font-mono text-success mb-2 whitespace-pre-wrap">' + result.sql + '</pre>';
+                h += '<button class="btn btn-primary btn-xs mb-2" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Optimized SQL</button>';
+            }
+            h += '<div class="text-base-content/90">' + (result.explanation || '') + '</div>';
+            if (result.suggestions && result.suggestions.length) {
+                h += '<div class="mt-2 text-xs text-base-content/60">';
+                result.suggestions.forEach(function (s) { h += '<div>- ' + s + '</div>'; });
+                h += '</div>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
+    },
+
+    aiGenerate: function () {
+        var description = prompt('Describe what you want to query:');
+        if (!description) return;
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+
+        YDB.UI.toast('AI generating SQL...', 'info');
+        YDB.API.post('/ai/sql-generate', { connectionId: connId, description: description }).then(function (result) {
+            if (result.sql) {
+                document.getElementById('sql-input').value = result.sql;
+                YDB.UI.toast('SQL generated!', 'success');
+                var el = document.getElementById('sql-results');
+                el.innerHTML = '<div class="bg-base-200 rounded-lg p-3 m-2 text-sm text-base-content/70">' + (result.explanation || '') + '</div>';
+            } else {
+                YDB.UI.toast('Could not generate SQL. Try rephrasing.', 'warning');
+            }
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
+    },
+
+    aiFix: function (sql, error) {
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+
+        YDB.API.post('/ai/sql-fix', { connectionId: connId, sql: sql, error: error }).then(function (result) {
+            var el = document.getElementById('sql-results');
+            var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
+            h += '<div class="font-semibold text-primary mb-2">AI Fix Suggestion</div>';
+            h += '<div class="text-base-content/90 mb-2">' + (result.explanation || '') + '</div>';
+            if (result.sql && result.sql !== sql) {
+                h += '<pre class="bg-base-300 rounded p-2 text-xs font-mono text-success mb-2 whitespace-pre-wrap">' + result.sql + '</pre>';
+                h += '<button class="btn btn-primary btn-xs" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Fix</button>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+        }).catch(function (err) { YDB.UI.toast('AI fix unavailable', 'error'); });
     }
 };
