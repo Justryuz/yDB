@@ -240,33 +240,55 @@ YDB.Builder = {
         var isCrossDb = connIds.length > 1;
 
         if (YDB.API.isOnline() && YDB.API.token) {
-            if (isCrossDb && YDB.State.canvasJoins.length) {
-                // Federated query — use /api/federated/execute
+            if (isCrossDb) {
+                // Cross-database — always use federated engine
                 var sources = YDB.State.canvasTables.map(function (t) {
-                    return { connectionId: t.connId, table: t.name, columns: t.selectedColumns };
+                    return { connectionId: t.connId, table: t.name, columns: t.selectedColumns.length > 0 ? t.selectedColumns : undefined };
                 });
+
                 var join = null;
                 if (YDB.State.canvasJoins.length) {
                     var j = YDB.State.canvasJoins[0];
                     var lt = YDB.State.canvasTables.find(function (t) { return t.id === j.leftId; });
                     var rt = YDB.State.canvasTables.find(function (t) { return t.id === j.rightId; });
-                    join = {
-                        leftIdx: sources.findIndex(function (s) { return s.connectionId == lt.connId && s.table === lt.name; }),
-                        rightIdx: sources.findIndex(function (s) { return s.connectionId == rt.connId && s.table === rt.name; }),
-                        leftCol: j.leftCol,
-                        rightCol: j.rightCol,
-                        type: j.type.replace(' JOIN', '')
-                    };
+                    if (lt && rt) {
+                        join = {
+                            leftIdx: sources.findIndex(function (s) { return s.connectionId == lt.connId && s.table === lt.name; }),
+                            rightIdx: sources.findIndex(function (s) { return s.connectionId == rt.connId && s.table === rt.name; }),
+                            leftCol: j.leftCol,
+                            rightCol: j.rightCol,
+                            type: (j.type || 'INNER JOIN').replace(' JOIN', '')
+                        };
+                    }
                 }
+
+                if (!join) {
+                    // No join defined — show guidance
+                    container.innerHTML = '<div class="bg-base-200 border border-base-300 rounded-lg p-4 m-2 text-sm">'
+                        + '<div class="font-semibold text-base-content mb-2">Cross-Database Query (Federated via DuckDB)</div>'
+                        + '<div class="text-base-content/70 text-xs mb-3">'
+                        + 'Tables are from different databases. To execute a cross-DB JOIN:<br>'
+                        + '1. Click <b>AI Join</b> to detect relationships<br>'
+                        + '2. <b>Accept</b> a suggested join condition<br>'
+                        + '3. Click <b>Generate & Run</b> again<br><br>'
+                        + 'DuckDB will fetch data from each database separately and perform the JOIN in-memory.'
+                        + '</div>'
+                        + '<button class="btn btn-primary btn-xs" onclick="YDB.Builder.aiSuggestJoin()">AI Join</button> '
+                        + '<button class="btn btn-ghost btn-xs" onclick="YDB.Builder._runFederatedNoJoin()">Run without JOIN (separate datasets)</button>'
+                        + '</div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="text-xs text-base-content/50 p-2">Executing federated query via DuckDB...</div>';
                 YDB.API.post('/federated/execute', { sources: sources, join: join })
                     .then(function (result) {
-                        if (!result.data || !result.data.length) { container.innerHTML = '<div class="alert alert-info text-sm m-2">0 rows returned</div>'; return; }
+                        if (!result.data || !result.data.length) { container.innerHTML = '<div class="bg-base-200 rounded p-3 m-2 text-sm text-base-content/70">0 rows returned. The JOIN condition may not match any records.</div>'; return; }
                         YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
                         document.getElementById('builder-export-btns').classList.remove('hidden');
                         YDB.History.add(sql);
-                        YDB.UI.toast('Federated query: ' + result.rowCount + ' rows', 'success');
+                        YDB.UI.toast('Federated query: ' + result.rowCount + ' rows (via DuckDB)', 'success');
                     })
-                    .catch(function (err) { container.innerHTML = '<div class="alert alert-error text-sm m-2">' + err.message + '</div>'; });
+                    .catch(function (err) { container.innerHTML = '<div class="bg-error/10 border border-error/30 rounded p-3 m-2 text-sm text-error">' + err.message + '</div>'; });
             } else if (conn && conn.id) {
                 // Single-DB query
                 YDB.API.post('/query/execute', { connectionId: conn.id, sql: sql })
@@ -300,6 +322,23 @@ YDB.Builder = {
         if (sql.indexOf('-- Drag') === 0 || sql.indexOf('-- Select columns') === 0) return;
         // Re-use generateAndRun which handles both single and federated queries
         this.generateAndRun();
+    },
+
+    _runFederatedNoJoin: function () {
+        var sources = YDB.State.canvasTables.map(function (t) {
+            return { connectionId: t.connId, table: t.name, columns: t.selectedColumns.length > 0 ? t.selectedColumns : undefined };
+        });
+        var container = document.getElementById('builder-results');
+        container.innerHTML = '<div class="text-xs text-base-content/50 p-2">Fetching data from each database...</div>';
+
+        YDB.API.post('/federated/execute', { sources: sources })
+            .then(function (result) {
+                if (!result.data || !result.data.length) { container.innerHTML = '<div class="bg-base-200 rounded p-3 m-2 text-sm text-base-content/70">0 rows returned from federated sources.</div>'; return; }
+                YDB.UI.renderTable('builder-results', result.columns, result.columns, result.data);
+                document.getElementById('builder-export-btns').classList.remove('hidden');
+                YDB.UI.toast('Data fetched: ' + result.rowCount + ' rows (no join applied)', 'success');
+            })
+            .catch(function (err) { container.innerHTML = '<div class="bg-error/10 border border-error/30 rounded p-3 m-2 text-sm text-error">' + err.message + '</div>'; });
     },
 
     // === Zoom ===
