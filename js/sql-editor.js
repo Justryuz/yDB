@@ -121,6 +121,20 @@ YDB.SQLEditor = {
 
     // ── AI SQL Assistant ──
 
+    /** Simple markdown to HTML converter for AI responses */
+    _md: function (text) {
+        if (!text) return '';
+        return text
+            .replace(/### (.*?)(\n|$)/g, '<div class="font-semibold text-sm mt-2 mb-1">$1</div>')
+            .replace(/## (.*?)(\n|$)/g, '<div class="font-bold text-sm mt-2 mb-1">$1</div>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code class="bg-base-300 px-1 rounded text-xs font-mono">$1</code>')
+            .replace(/^\d+\.\s+(.*?)$/gm, '<li class="ml-4">$1</li>')
+            .replace(/^[-*]\s+(.*?)$/gm, '<li class="ml-4">$1</li>')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+    },
+
     aiExplain: function () {
         var sql = document.getElementById('sql-input').value.trim();
         if (!sql) { YDB.UI.toast('Enter SQL to explain', 'warning'); return; }
@@ -131,12 +145,9 @@ YDB.SQLEditor = {
         YDB.API.post('/ai/sql-explain', { connectionId: connId, sql: sql }).then(function (result) {
             var el = document.getElementById('sql-results');
             var text = result.explanation || 'No explanation available.';
-            // Format: split into sentences, show as bullet points
-            var sentences = text.split(/\.\s+/).filter(function(s) { return s.trim().length > 0; });
-            var formatted = sentences.map(function(s) { return '<li class="mb-1">' + s.trim() + (s.endsWith('.') ? '' : '.') + '</li>'; }).join('');
             el.innerHTML = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">'
                 + '<div class="font-semibold text-primary mb-2">AI Explanation</div>'
-                + '<ul class="list-disc ml-4 text-base-content/90 text-xs leading-relaxed">' + formatted + '</ul>'
+                + '<div class="text-xs text-base-content/90 leading-relaxed">' + YDB.SQLEditor._md(text) + '</div>'
                 + '</div>';
         }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
     },
@@ -159,13 +170,10 @@ YDB.SQLEditor = {
                 h += '<button class="btn btn-primary btn-xs mb-3" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Optimized SQL</button>';
             }
 
-            // Format explanation as bullet points
+            // Format explanation
             if (result.explanation) {
-                var points = result.explanation.split(/\.\s+/).filter(function(s) { return s.trim().length > 0; });
                 h += '<div class="text-xs text-base-content/60 mb-1">Analysis:</div>';
-                h += '<ul class="list-disc ml-4 text-xs text-base-content/80 space-y-1">';
-                points.forEach(function(p) { h += '<li>' + p.trim() + (p.endsWith('.') ? '' : '.') + '</li>'; });
-                h += '</ul>';
+                h += '<div class="text-xs text-base-content/80 leading-relaxed">' + YDB.SQLEditor._md(result.explanation) + '</div>';
             }
 
             if (result.suggestions && result.suggestions.length) {
@@ -227,10 +235,11 @@ YDB.SQLEditor = {
             var el = document.getElementById('sql-results');
             var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
             h += '<div class="font-semibold text-primary mb-2">AI Fix Suggestion</div>';
-            h += '<div class="text-base-content/90 mb-2">' + (result.explanation || '') + '</div>';
+            h += '<div class="text-xs text-base-content/90 leading-relaxed mb-3">' + YDB.SQLEditor._md(result.explanation || '') + '</div>';
             if (result.sql && result.sql !== sql) {
-                h += '<pre class="bg-base-300 rounded p-2 text-xs font-mono text-success mb-2 whitespace-pre-wrap">' + result.sql + '</pre>';
-                h += '<button class="btn btn-primary btn-xs" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Fix</button>';
+                h += '<div class="text-xs text-base-content/60 mb-1">Fixed SQL:</div>';
+                h += '<pre class="bg-base-300 rounded p-3 text-xs font-mono text-success mb-2 whitespace-pre-wrap max-h-40 overflow-auto">' + YDB.UI.esc(result.sql) + '</pre>';
+                h += '<button class="btn btn-primary btn-xs" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">Apply Fix</button>';
             }
             h += '</div>';
             el.innerHTML = h;
