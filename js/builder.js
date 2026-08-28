@@ -407,17 +407,35 @@ YDB.Builder = {
 
         YDB.UI.toast('AI analyzing relationships...', 'info');
 
-        // Get unique connection IDs from canvas tables
+        // Ensure schemas are loaded for all canvas table connections
         var connIds = [];
-        tables.forEach(function (t) { if (t.connectionId && connIds.indexOf(t.connectionId) < 0) connIds.push(t.connectionId); });
-        if (connIds.length === 0 && conn) connIds.push(conn.id);
+        tables.forEach(function (t) { if (t.connId && connIds.indexOf(t.connId) < 0) connIds.push(t.connId); });
 
-        // Analyze all canvas tables directly using column info already available
+        var needsFetch = connIds.filter(function (cid) { return !YDB.MockData.schemas[cid]; });
+        if (needsFetch.length > 0) {
+            Promise.all(needsFetch.map(function (cid) {
+                return YDB.API.get('/explorer/' + cid + '/schema').then(function (schema) {
+                    YDB.MockData.schemas[cid] = schema;
+                }).catch(function () {});
+            })).then(function () { YDB.Builder._doAiAnalysis(tables); });
+            return;
+        }
+
+        this._doAiAnalysis(tables);
+    },
+
+    _doAiAnalysis: function (tables) {
+
+        // Analyze all canvas tables directly using column info from schema cache
         var canvasSuggestions = [];
         for (var i = 0; i < tables.length; i++) {
             for (var j = i + 1; j < tables.length; j++) {
                 var tA = tables[i], tB = tables[j];
-                var colsA = tA.columns || [], colsB = tB.columns || [];
+                // Get columns from schema cache (not from canvas table object)
+                var schemaA = YDB.MockData.schemas[tA.connId];
+                var schemaB = YDB.MockData.schemas[tB.connId];
+                var colsA = (schemaA && schemaA.tables && schemaA.tables[tA.name]) ? (schemaA.tables[tA.name].columns || []) : [];
+                var colsB = (schemaB && schemaB.tables && schemaB.tables[tB.name]) ? (schemaB.tables[tB.name].columns || []) : [];
                 var nameA = tA.name, nameB = tB.name;
                 var singularA = nameA.replace(/s$/, '').toLowerCase();
                 var singularB = nameB.replace(/s$/, '').toLowerCase();
@@ -502,7 +520,18 @@ YDB.Builder = {
             YDB.Builder._showSuggestions(canvasSuggestions);
             YDB.UI.toast('AI found ' + canvasSuggestions.length + ' relationship(s)', 'success');
         } else {
-            YDB.UI.toast('No relationships detected. Try tables with matching ID columns.', 'info');
+            // Show helpful message when no match found
+            var el = document.getElementById('builder-results');
+            var old = document.getElementById('join-suggestion'); if (old) old.remove();
+            var h = '<div class="alert alert-warning p-3 m-2 text-xs" id="join-suggestion">'
+                + '<div class="font-semibold mb-1">AI Analysis Complete</div>'
+                + '<div class="text-base-content/70">No direct FK relationships detected between these tables. Suggestions:<br>'
+                + '- Check if both tables share a common ID column (user_id, account_id)<br>'
+                + '- Try adding a bridging table that connects them<br>'
+                + '- Join on shared business fields (email, phone, code)<br>'
+                + '- For cross-DB tables, ensure both have a common identifier</div>'
+                + '<button class="btn btn-ghost btn-xs mt-2" onclick="YDB.Builder.dismissSuggestion()">Dismiss</button></div>';
+            el.insertAdjacentHTML('afterbegin', h);
         }
     },
 
