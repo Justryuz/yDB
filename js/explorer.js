@@ -29,6 +29,13 @@ YDB.Explorer = {
             var table = YDB.State.activeTable;
             if (conn && table) YDB.StructureEditor.open(conn.id, table);
         });
+        // Data Quality
+        document.getElementById('btn-data-quality').addEventListener('click', function () {
+            var conn = YDB.State.activeConnection;
+            var table = YDB.State.activeTable;
+            if (!conn || !table) { YDB.UI.toast('Select a table first', 'warning'); return; }
+            YDB.Explorer.runDataQuality(conn.id, table);
+        });
         // Masking toggle
         document.getElementById('btn-toggle-mask').addEventListener('click', function () {
             YDB.Masking.toggle();
@@ -163,6 +170,64 @@ YDB.Explorer = {
         } else {
             document.getElementById('data-viewer').innerHTML = '<p class="text-base-content/40 text-sm m-4">No data available (offline)</p>';
         }
+    },
+
+    /** Run AI Data Quality scan on a table */
+    runDataQuality: function (connId, tableName) {
+        if (!YDB.API.isOnline() || !YDB.API.token) { YDB.UI.toast('Backend not available', 'error'); return; }
+
+        YDB.UI.toast('Scanning data quality...', 'info');
+        var viewer = document.getElementById('data-viewer');
+        viewer.innerHTML = '<div class="p-4 text-center text-base-content/50"><span class="loading loading-spinner loading-sm"></span> AI analyzing data quality...</div>';
+
+        YDB.API.post('/ai/data-quality', { connectionId: connId, tableName: tableName }).then(function (report) {
+            var h = '<div class="p-4">';
+
+            // Score badge
+            var scoreColor = report.score >= 80 ? 'text-success' : report.score >= 60 ? 'text-warning' : 'text-error';
+            h += '<div class="flex items-center gap-3 mb-4">';
+            h += '<div class="text-3xl font-bold ' + scoreColor + '">' + report.score + '/100</div>';
+            h += '<div><div class="font-semibold">Data Quality Score</div>';
+            h += '<div class="text-xs text-base-content/60">' + report.totalRows + ' rows, ' + report.columnCount + ' columns analyzed</div></div>';
+            h += '</div>';
+
+            // Summary
+            h += '<div class="text-sm text-base-content/80 mb-4">' + report.summary + '</div>';
+
+            // Issues
+            if (report.issues && report.issues.length > 0) {
+                h += '<div class="text-sm font-semibold mb-2">Issues Found (' + report.issues.length + ')</div>';
+                h += '<div class="space-y-1">';
+                report.issues.forEach(function (issue) {
+                    var icon = issue.severity >= 3 ? 'text-error' : issue.severity >= 2 ? 'text-warning' : 'text-info';
+                    var badge = issue.severity >= 3 ? 'Critical' : issue.severity >= 2 ? 'Warning' : 'Info';
+                    h += '<div class="flex items-start gap-2 bg-base-200 rounded p-2 text-xs">';
+                    h += '<span class="badge badge-xs ' + icon + '">' + badge + '</span>';
+                    h += '<div class="flex-1">';
+                    h += '<span class="font-mono text-primary">' + issue.column + '</span> — ' + issue.message;
+                    h += '</div></div>';
+                });
+                h += '</div>';
+            }
+
+            // Fix suggestions
+            if (report.fixes && report.fixes.length > 0) {
+                h += '<div class="text-sm font-semibold mt-4 mb-2">Suggested Fixes (' + report.fixes.length + ')</div>';
+                h += '<div class="space-y-1">';
+                report.fixes.forEach(function (fix) {
+                    h += '<div class="bg-base-300/50 rounded p-2 text-xs font-mono flex items-center gap-2">';
+                    h += '<pre class="flex-1 whitespace-pre-wrap text-success">' + fix + '</pre>';
+                    h += '<button class="btn btn-xs btn-ghost text-primary shrink-0" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Copied to SQL Editor\',\'success\');document.querySelector(\'[data-tab=editor]\').click()" data-sql="' + fix.replace(/"/g, '&quot;') + '">Copy</button>';
+                    h += '</div>';
+                });
+                h += '</div>';
+            }
+
+            h += '</div>';
+            viewer.innerHTML = h;
+        }).catch(function (err) {
+            viewer.innerHTML = '<div class="p-4 text-error text-sm">Quality scan failed: ' + err.message + '</div>';
+        });
     },
 
     /** @private Render table data into viewer */

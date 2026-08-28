@@ -280,6 +280,53 @@ async function _getConnectionInfo(connectionId, userId) {
     return result.rows[0] || null;
 }
 
+// AI Data Quality Scanner
+app.post('/api/ai/data-quality', authenticate, async (req, res) => {
+    try {
+        const { connectionId, tableName } = req.body;
+        if (!connectionId || !tableName) return res.status(400).json({ error: 'connectionId and tableName required' });
+
+        // Get schema
+        const schema = await _getSchemaForConnection(req.user.id, connectionId);
+        const tableInfo = schema?.tables?.[tableName];
+        if (!tableInfo) return res.status(404).json({ error: 'Table not found in schema' });
+
+        // Get connection and fetch sample data
+        const db2 = require('./db/pool');
+        const connResult = await db2.query('SELECT * FROM connections WHERE id = $1 AND user_id = $2', [connectionId, req.user.id]);
+        if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
+
+        const conn = connResult.rows[0];
+        const crypto = require('crypto');
+        let password = '';
+        try {
+            if (conn.password_encrypted) {
+                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
+                const [ivHex, encrypted] = conn.password_encrypted.split(':');
+                const iv = Buffer.from(ivHex, 'hex');
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
+            }
+        } catch (e) {}
+
+        const options = conn.options || {};
+        const { withTunnel } = require('./services/ssh-tunnel');
+        const { opts, cleanup } = await withTunnel(
+            { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: (options.endpoints || []), options },
+            options.ssh
+        );
+
+        const adapter = await poolManager.getAdapter(connectionId, conn.db_type, opts);
+        const result = await adapter.query(`SELECT * FROM ${tableName} LIMIT 500`);
+        cleanup();
+
+        // Run quality scan
+        const dataQuality = require('./services/data-quality');
+        const report = dataQuality.scanTable(result.data, tableInfo.columns || [], tableName, conn.db_type);
+        res.json(report);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Pool stats (admin only)
 app.get('/api/pool/stats', authenticate, authorize('admin'), (req, res) => {
     res.json(poolManager.getStats());
