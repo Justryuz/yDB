@@ -13,6 +13,7 @@ const SQLiteAdapter = require('./sqlite');
 const DynamoDBAdapter = require('./dynamodb');
 const ClickHouseAdapter = require('./clickhouse');
 const RestAPIAdapter = require('./rest-api');
+const TrinoAdapter = require('./trino');
 
 const adapterMap = {
     postgresql: PostgreSQLAdapter,
@@ -29,7 +30,9 @@ const adapterMap = {
     redshift: PostgreSQLAdapter,
     clickhouse: ClickHouseAdapter,
     restapi: RestAPIAdapter,
-    api: RestAPIAdapter
+    api: RestAPIAdapter,
+    trino: TrinoAdapter,
+    presto: TrinoAdapter
 };
 
 /**

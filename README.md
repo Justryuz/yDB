@@ -15,7 +15,7 @@ A production-grade, open-source database management platform with AI-powered BI 
 ## Features
 
 - **Cross-Database Joins** — Join tables from MySQL + PostgreSQL + MongoDB in one query via DuckDB engine (9ms for 2-way, 13ms for 3-way joins)
-- **12+ Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL, REST API
+- **14+ Database Types** — PostgreSQL, MySQL, MongoDB, SQL Server, SQLite, Redis, Neo4j, ClickHouse, DynamoDB, Redshift, Azure SQL, Cloud SQL, REST API, Trino/Presto
 - **Copilot (Text-to-SQL)** — Ask business questions in plain English, get SQL + results + charts instantly. Hybrid AI with self-correction and learning
 - **REST API Connections** — Connect to any HTTP API with bearer token, auto-discover schema from JSON responses
 - **Visual Query Builder** — Drag-drop tables, auto-detect joins, generate SQL
@@ -126,6 +126,62 @@ yDB is hardened for production deployment. See [SECURITY.md](SECURITY.md) for fu
 - PostgreSQL: `pg_cancel_backend()` / MySQL: `KILL QUERY`
 - For unsupported backends: connection is destroyed to abort the query
 - Cancelled queries are logged to the audit trail with status `cancelled`
+
+## Cross-Database Federation
+
+yDB supports multiple approaches for joining data across different databases:
+
+### Federated Query Engines
+
+| Engine | Approach | Best For | Status |
+|---|---|---|---|
+| **DuckDB** (default) | Pull data → join in-memory | Small-medium datasets (<100K rows/table), instant setup | Built-in |
+| **Trino/Presto** | Distributed SQL engine, queries sources directly | Enterprise multi-source, large datasets (millions of rows) | Adapter ready |
+| **Apache Spark** | Distributed processing via DataFrames | Massive scale (billions of rows), ML pipelines | Future |
+| **dbt** | Transform + model relationships | Data warehouse modeling, scheduled transforms | Future |
+
+### How DuckDB Federation Works
+
+```
+┌─── MySQL ───┐     ┌─── PostgreSQL ───┐
+│  orders     │     │  accounts        │
+│  users      │     │  subscriptions   │
+└──────┬──────┘     └────────┬─────────┘
+       │                     │
+       ▼                     ▼
+   Fetch data           Fetch data
+   via adapter          via adapter
+       │                     │
+       └────────┬────────────┘
+                ▼
+      ┌── DuckDB (in-memory) ──┐
+      │  Load as temp tables    │
+      │  Execute JOIN SQL       │
+      │  Return merged results  │
+      └─────────────────────────┘
+```
+
+### How Trino Federation Works
+
+```
+┌─── MySQL ───┐     ┌─── PostgreSQL ───┐     ┌─── S3/Hive ───┐
+│  catalog A  │     │  catalog B       │     │  catalog C    │
+└──────┬──────┘     └────────┬─────────┘     └──────┬────────┘
+       │                     │                       │
+       └─────────────────────┼───────────────────────┘
+                             ▼
+              ┌── Trino Coordinator ──┐
+              │  Parse SQL            │
+              │  Push down predicates │
+              │  Distribute joins     │
+              │  Return unified       │
+              └───────────────────────┘
+```
+
+### When to Use What
+
+- **DuckDB (default)**: No extra setup, works immediately. Best for ad-hoc cross-DB queries where each table has <100K rows.
+- **Trino**: When you have a Trino cluster deployed. Best for repeated enterprise queries across many data sources at scale.
 
 ## Copilot — Text-to-SQL (NLQ Engine v3)
 
@@ -242,6 +298,7 @@ NLQ_BASE_URL=https://api.openai.com/v1
 | Azure SQL / Synapse | `mssql` | Same as SQL Server |
 | Google Cloud SQL | `pg` / `mysql2` | PostgreSQL or MySQL compatible |
 | REST API | `curl` (HTTP) | Any HTTP API with bearer token, auto-schema discovery |
+| Trino / Presto | HTTP protocol | Federated SQL engine, cross-source queries at scale |
 
 ## API Reference
 
