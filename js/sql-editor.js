@@ -151,17 +151,28 @@ YDB.SQLEditor = {
         YDB.API.post('/ai/sql-optimize', { connectionId: connId, sql: sql }).then(function (result) {
             var el = document.getElementById('sql-results');
             var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
-            h += '<div class="font-semibold text-primary mb-2">AI Optimization</div>';
+            h += '<div class="font-semibold text-primary mb-3">AI Optimization</div>';
+
             if (result.sql && result.sql !== sql) {
                 h += '<div class="text-xs text-base-content/60 mb-1">Optimized SQL:</div>';
-                h += '<pre class="bg-base-300 rounded p-2 text-xs font-mono text-success mb-2 whitespace-pre-wrap">' + result.sql + '</pre>';
-                h += '<button class="btn btn-primary btn-xs mb-2" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Optimized SQL</button>';
+                h += '<pre class="bg-base-300 rounded p-3 text-xs font-mono text-success mb-3 whitespace-pre-wrap max-h-40 overflow-auto">' + YDB.UI.esc(result.sql) + '</pre>';
+                h += '<button class="btn btn-primary btn-xs mb-3" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;') + '">Apply Optimized SQL</button>';
             }
-            h += '<div class="text-base-content/90">' + (result.explanation || '') + '</div>';
+
+            // Format explanation as bullet points
+            if (result.explanation) {
+                var points = result.explanation.split(/\.\s+/).filter(function(s) { return s.trim().length > 0; });
+                h += '<div class="text-xs text-base-content/60 mb-1">Analysis:</div>';
+                h += '<ul class="list-disc ml-4 text-xs text-base-content/80 space-y-1">';
+                points.forEach(function(p) { h += '<li>' + p.trim() + (p.endsWith('.') ? '' : '.') + '</li>'; });
+                h += '</ul>';
+            }
+
             if (result.suggestions && result.suggestions.length) {
-                h += '<div class="mt-2 text-xs text-base-content/60">';
-                result.suggestions.forEach(function (s) { h += '<div>- ' + s + '</div>'; });
-                h += '</div>';
+                h += '<div class="text-xs text-base-content/60 mt-3 mb-1">Suggestions:</div>';
+                h += '<ul class="list-disc ml-4 text-xs text-base-content/80 space-y-1">';
+                result.suggestions.forEach(function (s) { h += '<li>' + s + '</li>'; });
+                h += '</ul>';
             }
             h += '</div>';
             el.innerHTML = h;
