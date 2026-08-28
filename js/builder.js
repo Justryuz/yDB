@@ -520,17 +520,55 @@ YDB.Builder = {
             YDB.Builder._showSuggestions(canvasSuggestions);
             YDB.UI.toast('AI found ' + canvasSuggestions.length + ' relationship(s)', 'success');
         } else {
-            // Show helpful message when no match found
+            // Smart analysis — show what columns each table has and propose strategies
             var el = document.getElementById('builder-results');
             var old = document.getElementById('join-suggestion'); if (old) old.remove();
-            var h = '<div class="alert alert-warning p-3 m-2 text-xs" id="join-suggestion">'
-                + '<div class="font-semibold mb-1">AI Analysis Complete</div>'
-                + '<div class="text-base-content/70">No direct FK relationships detected between these tables. Suggestions:<br>'
-                + '- Check if both tables share a common ID column (user_id, account_id)<br>'
-                + '- Try adding a bridging table that connects them<br>'
-                + '- Join on shared business fields (email, phone, code)<br>'
-                + '- For cross-DB tables, ensure both have a common identifier</div>'
-                + '<button class="btn btn-ghost btn-xs mt-2" onclick="YDB.Builder.dismissSuggestion()">Dismiss</button></div>';
+
+            var h = '<div class="bg-base-200 border border-base-300 rounded-lg p-4 m-2 text-sm" id="join-suggestion">';
+            h += '<div class="font-semibold text-base-content mb-3">AI Relationship Analysis</div>';
+
+            // Analyze each table pair and show compatible columns
+            for (var i = 0; i < tables.length; i++) {
+                for (var j = i + 1; j < tables.length; j++) {
+                    var tA = tables[i], tB = tables[j];
+                    var schA = YDB.MockData.schemas[tA.connId];
+                    var schB = YDB.MockData.schemas[tB.connId];
+                    var cA = (schA && schA.tables && schA.tables[tA.name]) ? (schA.tables[tA.name].columns || []) : [];
+                    var cB = (schB && schB.tables && schB.tables[tB.name]) ? (schB.tables[tB.name].columns || []) : [];
+
+                    h += '<div class="mb-3 p-2 bg-base-300/50 rounded">';
+                    h += '<div class="text-xs font-semibold text-primary mb-1">' + tA.name + ' ↔ ' + tB.name + '</div>';
+
+                    // Show ID columns from each table
+                    var idColsA = cA.filter(function(c) { return (c.name||c).toLowerCase().endsWith('_id') || (c.name||c).toLowerCase() === 'id'; }).map(function(c) { return c.name || c; });
+                    var idColsB = cB.filter(function(c) { return (c.name||c).toLowerCase().endsWith('_id') || (c.name||c).toLowerCase() === 'id'; }).map(function(c) { return c.name || c; });
+
+                    h += '<div class="text-xs text-base-content/70 mb-1">';
+                    h += '<span class="text-info">' + tA.name + '</span> keys: ' + (idColsA.length > 0 ? idColsA.join(', ') : 'none') + '<br>';
+                    h += '<span class="text-info">' + tB.name + '</span> keys: ' + (idColsB.length > 0 ? idColsB.join(', ') : 'none');
+                    h += '</div>';
+
+                    // Find shared column names
+                    var namesA = cA.map(function(c) { return (c.name||c).toLowerCase(); });
+                    var namesB = cB.map(function(c) { return (c.name||c).toLowerCase(); });
+                    var shared = namesA.filter(function(n) { return namesB.includes(n) && n !== 'created_at' && n !== 'updated_at'; });
+
+                    if (shared.length > 0) {
+                        h += '<div class="text-xs text-success mt-1">Shared columns: ' + shared.join(', ') + '</div>';
+                        h += '<div class="text-xs text-base-content/60 mt-1">Try: JOIN ON ' + tA.name + '.' + shared[0] + ' = ' + tB.name + '.' + shared[0] + '</div>';
+                    } else {
+                        h += '<div class="text-xs text-base-content/60 mt-1">No shared columns. Possible approaches:</div>';
+                        h += '<div class="text-xs text-base-content/60">- Create a mapping table linking these entities</div>';
+                        if (idColsA.length > 0 && idColsB.length > 0) {
+                            h += '<div class="text-xs text-base-content/60">- Try: ' + tA.name + '.' + idColsA[0] + ' = ' + tB.name + '.' + idColsB[0] + ' (if logically related)</div>';
+                        }
+                    }
+                    h += '</div>';
+                }
+            }
+
+            h += '<button class="btn btn-ghost btn-xs mt-2" onclick="YDB.Builder.dismissSuggestion()">Dismiss</button>';
+            h += '</div>';
             el.insertAdjacentHTML('afterbegin', h);
         }
     },
