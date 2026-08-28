@@ -400,7 +400,6 @@ YDB.Builder = {
      */
     aiSuggestJoin: function () {
         var conn = YDB.State.activeConnection;
-        if (!conn) { YDB.UI.toast('Select a connection first', 'warning'); return; }
         if (!YDB.API.isOnline() || !YDB.API.token) { YDB.UI.toast('Backend not available', 'error'); return; }
 
         var tables = YDB.State.canvasTables;
@@ -408,47 +407,103 @@ YDB.Builder = {
 
         YDB.UI.toast('AI analyzing relationships...', 'info');
 
-        YDB.API.post('/ai/suggest-joins', { connectionId: conn.id }).then(function (data) {
-            var suggestions = (data.suggestions || []).filter(function (s) {
-                // Only show suggestions for tables currently on canvas
-                var canvasNames = tables.map(function (t) { return t.name; });
-                var fromTable = s.from.split('.')[0];
-                var toTable = s.to.split('.')[0];
-                return canvasNames.includes(fromTable) && canvasNames.includes(toTable);
-            });
+        // Get unique connection IDs from canvas tables
+        var connIds = [];
+        tables.forEach(function (t) { if (t.connectionId && connIds.indexOf(t.connectionId) < 0) connIds.push(t.connectionId); });
+        if (connIds.length === 0 && conn) connIds.push(conn.id);
 
-            if (suggestions.length === 0) {
-                YDB.UI.toast('No relationships detected between canvas tables', 'info');
-                return;
+        // Analyze all canvas tables directly using column info already available
+        var canvasSuggestions = [];
+        for (var i = 0; i < tables.length; i++) {
+            for (var j = i + 1; j < tables.length; j++) {
+                var tA = tables[i], tB = tables[j];
+                var colsA = tA.columns || [], colsB = tB.columns || [];
+                var nameA = tA.name, nameB = tB.name;
+                var singularA = nameA.replace(/s$/, '').toLowerCase();
+                var singularB = nameB.replace(/s$/, '').toLowerCase();
+
+                // Strategy 1: FK naming pattern
+                for (var ci = 0; ci < colsA.length; ci++) {
+                    var cn = (colsA[ci].name || colsA[ci]).toLowerCase();
+                    if (cn === singularB + '_id') {
+                        canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: colsA[ci].name || colsA[ci], rightId: tB.id, rightName: nameB, rightCol: 'id', confidence: 0.95, reason: 'FK: ' + nameA + '.' + cn + ' → ' + nameB + '.id' });
+                    }
+                }
+                for (var ci = 0; ci < colsB.length; ci++) {
+                    var cn = (colsB[ci].name || colsB[ci]).toLowerCase();
+                    if (cn === singularA + '_id') {
+                        canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: 'id', rightId: tB.id, rightName: nameB, rightCol: colsB[ci].name || colsB[ci], confidence: 0.95, reason: 'FK: ' + nameB + '.' + cn + ' → ' + nameA + '.id' });
+                    }
+                }
+
+                // Strategy 2: Same column name (both have user_id, both have email, etc.)
+                for (var ci = 0; ci < colsA.length; ci++) {
+                    var aName = (colsA[ci].name || colsA[ci]).toLowerCase();
+                    if (aName === 'id') continue;
+                    for (var cj = 0; cj < colsB.length; cj++) {
+                        var bName = (colsB[cj].name || colsB[cj]).toLowerCase();
+                        if (bName === 'id') continue;
+                        if (aName === bName && aName.endsWith('_id')) {
+                            canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: colsA[ci].name || colsA[ci], rightId: tB.id, rightName: nameB, rightCol: colsB[cj].name || colsB[cj], confidence: 0.85, reason: 'Shared key: ' + aName });
+                        }
+                    }
+                }
+
+                // Strategy 3: ID column in one matches *_id pattern in other
+                for (var ci = 0; ci < colsA.length; ci++) {
+                    var aName = (colsA[ci].name || colsA[ci]).toLowerCase();
+                    if (aName === 'id') {
+                        for (var cj = 0; cj < colsB.length; cj++) {
+                            var bName = (colsB[cj].name || colsB[cj]).toLowerCase();
+                            if (bName.endsWith('_id') && bName.includes(singularA)) {
+                                canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: 'id', rightId: tB.id, rightName: nameB, rightCol: colsB[cj].name || colsB[cj], confidence: 0.8, reason: 'ID match: ' + nameA + '.id ↔ ' + nameB + '.' + bName });
+                            }
+                        }
+                    }
+                }
+                for (var ci = 0; ci < colsB.length; ci++) {
+                    var bName = (colsB[ci].name || colsB[ci]).toLowerCase();
+                    if (bName === 'id') {
+                        for (var cj = 0; cj < colsA.length; cj++) {
+                            var aName = (colsA[cj].name || colsA[cj]).toLowerCase();
+                            if (aName.endsWith('_id') && aName.includes(singularB)) {
+                                canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: colsA[cj].name || colsA[cj], rightId: tB.id, rightName: nameB, rightCol: 'id', confidence: 0.8, reason: 'ID match: ' + nameB + '.id ↔ ' + nameA + '.' + aName });
+                            }
+                        }
+                    }
+                }
+
+                // Strategy 4: Any _id column to any id column (loose)
+                if (canvasSuggestions.filter(function(s){ return s.leftName===nameA && s.rightName===nameB; }).length === 0) {
+                    var anyIdA = colsA.find(function(c){ return (c.name||c).toLowerCase().endsWith('_id'); });
+                    var hasIdB = colsB.find(function(c){ return (c.name||c).toLowerCase() === 'id'; });
+                    if (anyIdA && hasIdB) {
+                        canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: anyIdA.name || anyIdA, rightId: tB.id, rightName: nameB, rightCol: 'id', confidence: 0.5, reason: 'Loose: ' + nameA + '.' + (anyIdA.name||anyIdA) + ' may reference ' + nameB + '.id' });
+                    }
+                    var anyIdB = colsB.find(function(c){ return (c.name||c).toLowerCase().endsWith('_id'); });
+                    var hasIdA = colsA.find(function(c){ return (c.name||c).toLowerCase() === 'id'; });
+                    if (anyIdB && hasIdA) {
+                        canvasSuggestions.push({ leftId: tA.id, leftName: nameA, leftCol: 'id', rightId: tB.id, rightName: nameB, rightCol: anyIdB.name || anyIdB, confidence: 0.5, reason: 'Loose: ' + nameB + '.' + (anyIdB.name||anyIdB) + ' may reference ' + nameA + '.id' });
+                    }
+                }
             }
+        }
 
-            // Convert to builder suggestion format
-            var builderSugs = suggestions.map(function (s) {
-                var fromParts = s.from.split('.');
-                var toParts = s.to.split('.');
-                var leftTable = tables.find(function (t) { return t.name === fromParts[0]; });
-                var rightTable = tables.find(function (t) { return t.name === toParts[0]; });
-                return {
-                    leftId: leftTable ? leftTable.id : null,
-                    leftName: fromParts[0],
-                    leftCol: fromParts[1],
-                    rightId: rightTable ? rightTable.id : null,
-                    rightName: toParts[0],
-                    rightCol: toParts[1],
-                    confidence: s.confidence,
-                    reason: s.reason
-                };
-            }).filter(function (s) { return s.leftId && s.rightId; });
+        // Deduplicate
+        var seen = {};
+        canvasSuggestions = canvasSuggestions.filter(function (s) {
+            var key = s.leftName + '.' + s.leftCol + '-' + s.rightName + '.' + s.rightCol;
+            if (seen[key]) return false;
+            seen[key] = true;
+            return true;
+        }).sort(function (a, b) { return b.confidence - a.confidence; });
 
-            if (builderSugs.length > 0) {
-                YDB.Builder._showSuggestions(builderSugs);
-                YDB.UI.toast('AI found ' + builderSugs.length + ' relationship(s)', 'success');
-            } else {
-                YDB.UI.toast('No joinable relationships found', 'info');
-            }
-        }).catch(function (err) {
-            YDB.UI.toast('AI analysis failed: ' + err.message, 'error');
-        });
+        if (canvasSuggestions.length > 0) {
+            YDB.Builder._showSuggestions(canvasSuggestions);
+            YDB.UI.toast('AI found ' + canvasSuggestions.length + ' relationship(s)', 'success');
+        } else {
+            YDB.UI.toast('No relationships detected. Try tables with matching ID columns.', 'info');
+        }
     },
 
     _autoSelectCols: function (tableId) {
