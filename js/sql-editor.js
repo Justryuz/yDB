@@ -130,9 +130,13 @@ YDB.SQLEditor = {
         YDB.UI.toast('AI analyzing query...', 'info');
         YDB.API.post('/ai/sql-explain', { connectionId: connId, sql: sql }).then(function (result) {
             var el = document.getElementById('sql-results');
+            var text = result.explanation || 'No explanation available.';
+            // Format: split into sentences, show as bullet points
+            var sentences = text.split(/\.\s+/).filter(function(s) { return s.trim().length > 0; });
+            var formatted = sentences.map(function(s) { return '<li class="mb-1">' + s.trim() + (s.endsWith('.') ? '' : '.') + '</li>'; }).join('');
             el.innerHTML = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">'
                 + '<div class="font-semibold text-primary mb-2">AI Explanation</div>'
-                + '<div class="text-base-content/90">' + (result.explanation || 'No explanation available.') + '</div>'
+                + '<ul class="list-disc ml-4 text-base-content/90 text-xs leading-relaxed">' + formatted + '</ul>'
                 + '</div>';
         }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
     },
@@ -165,8 +169,29 @@ YDB.SQLEditor = {
     },
 
     aiGenerate: function () {
-        var description = prompt('Describe what you want to query:');
-        if (!description) return;
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+        var el = document.getElementById('sql-results');
+
+        // Show inline input with suggestions
+        var h = '<div class="bg-base-200 rounded-lg p-4 m-2">';
+        h += '<div class="font-semibold text-primary text-sm mb-2">AI Generate SQL</div>';
+        h += '<div class="flex gap-2 mb-2"><input type="text" id="ai-gen-input" class="input input-sm input-bordered flex-1" placeholder="Describe what you want... e.g. show top 10 users by revenue"><button class="btn btn-primary btn-sm" onclick="YDB.SQLEditor._doGenerate()">Generate</button></div>';
+        h += '<div class="flex gap-1 flex-wrap text-xs">';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Show all users</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Count records per status</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Monthly trend</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Top 10 by amount</button>';
+        h += '<button class="btn btn-xs btn-outline" onclick="document.getElementById(\'ai-gen-input\').value=this.textContent;YDB.SQLEditor._doGenerate()">Find duplicates</button>';
+        h += '</div></div>';
+        el.innerHTML = h;
+
+        setTimeout(function() { document.getElementById('ai-gen-input').focus(); }, 100);
+    },
+
+    _doGenerate: function () {
+        var description = document.getElementById('ai-gen-input').value.trim();
+        if (!description) { YDB.UI.toast('Enter a description', 'warning'); return; }
         var conn = YDB.State.activeConnection;
         var connId = conn ? conn.id : null;
 
@@ -174,11 +199,11 @@ YDB.SQLEditor = {
         YDB.API.post('/ai/sql-generate', { connectionId: connId, description: description }).then(function (result) {
             if (result.sql) {
                 document.getElementById('sql-input').value = result.sql;
-                YDB.UI.toast('SQL generated!', 'success');
                 var el = document.getElementById('sql-results');
-                el.innerHTML = '<div class="bg-base-200 rounded-lg p-3 m-2 text-sm text-base-content/70">' + (result.explanation || '') + '</div>';
+                el.innerHTML = '<div class="bg-base-200 rounded-lg p-3 m-2 text-sm text-base-content/80">' + (result.explanation || 'SQL generated.') + '</div>';
+                YDB.UI.toast('SQL generated!', 'success');
             } else {
-                YDB.UI.toast('Could not generate SQL. Try rephrasing.', 'warning');
+                YDB.UI.toast('Could not generate. Try rephrasing.', 'warning');
             }
         }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
     },
