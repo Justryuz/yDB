@@ -17,6 +17,10 @@ desktop.ini
 node_modules/
 server/node_modules/
 
+# Test coverage
+coverage/
+server/coverage/
+
 # Environment
 .env
 notepad.txt

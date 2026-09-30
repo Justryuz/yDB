@@ -300,7 +300,7 @@
       "latest",
       "projects"
     ],
-    "ts": 1787821084760
+    "ts": 1788313951563
   },
   {
     "question": "Breakdown of Invoices by status",
@@ -344,7 +344,7 @@
       "trend",
       "accounts"
     ],
-    "ts": 1787822288925
+    "ts": 1788313946762
   },
   {
     "question": "total admin",
@@ -457,7 +457,7 @@
     "ts": 1787819877229
   },
   {
-    "question": "Monthly trend of Projects",
+    "question": "Monthly trend of projects",
     "sql": "SELECT TO_CHAR(created_by, 'YYYY-MM') AS month, COUNT(*) AS total FROM projects GROUP BY month ORDER BY month DESC LIMIT 12",
     "connectionId": "24",
     "dbType": "postgresql",
@@ -476,7 +476,7 @@
       "trend",
       "projects"
     ],
-    "ts": 1787921950733
+    "ts": 1788313949750
   },
   {
     "question": "LIST ADMIN",
