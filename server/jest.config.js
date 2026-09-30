@@ -10,6 +10,8 @@ module.exports = {
         'services/ssrf-guard.js',
         'services/ai-cache.js',
         'services/ai-provider.js',
+        'services/ai-agent.js',
+        'services/agent-tools.js',
         'services/adapters/base.js',
         'services/adapters/ssl.js',
         'services/adapters/postgresql.js',

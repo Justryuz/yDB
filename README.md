@@ -232,6 +232,24 @@ Question -> Intent Detection -> Schema Intelligence -> Query Plan -> SQL -> Vali
 - **Index / Performance Advisor** — index and rewrite recommendations, optionally from `EXPLAIN` (`/api/ai/advise-indexes`)
 - **Streaming Answers** — SSE progress + result for Copilot (`/api/ai/ask-stream`)
 
+### Agent Mode (ReAct loop)
+
+Toggle **Agent** in the Copilot to run a self-improving loop instead of a single
+pass. The agent reasons step by step and uses read-only tools before committing:
+
+```
+Reason  -> propose the next action (JSON)
+Act     -> run a read-only tool (list tables, describe, sample rows, EXPLAIN, run SELECT)
+Observe -> feed the result back in
+Reflect -> evaluate the result (empty / all-NULL / off-topic) and iterate
+```
+
+- **Tools are read-only** — every generated statement passes `validateSQL` (SELECT only); results are masked by the caller's role.
+- **Self-evaluating** — the loop keeps going if a query returns nothing useful, and verifies the final SQL by executing it once more.
+- **Guarded** — capped step count and wall-clock budget prevent runaway loops; if the budget is hit it falls back to the best validated query it found.
+- **Transparent** — each step (thought, tool, observation) streams to the UI over SSE via `GET /api/ai/agent-ask`.
+- **Graceful fallback** — with no LLM configured, it uses the builtin pipeline instead.
+
 ### Core Features
 
 - Schema-aware: reads connected database to generate accurate queries
@@ -348,6 +366,7 @@ API keys set via the Admin UI are never returned to the browser (only a masked h
 | **POST** | **`/api/nlq/ask`** | **Copilot — natural language → SQL → results** |
 | **POST** | **`/api/nlq/suggest`** | **Get suggested questions for a connection** |
 | GET | `/api/ai/ask-stream` | Copilot answer streamed over SSE |
+| GET | `/api/ai/agent-ask` | Agent mode — ReAct loop with streamed reasoning trace |
 | POST | `/api/ai/explain-error` | Explain a failed query + suggest a fix |
 | POST | `/api/ai/document-schema` | Auto-generate schema documentation |
 | POST | `/api/ai/advise-indexes` | Index / performance recommendations |

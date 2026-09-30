@@ -12,6 +12,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const aiFeatures = require('../services/ai-features');
 const aiProvider = require('../services/ai-provider');
+const aiAgent = require('../services/ai-agent');
 const connCtx = require('../services/connection-context');
 const { processQuestion } = require('../services/nlq');
 const { logFromRequest } = require('../services/audit-log');
@@ -127,6 +128,71 @@ router.get('/ask-stream', async (req, res) => {
     } catch (err) {
         send('error', { error: err.message });
     } finally {
+        res.end();
+    }
+});
+
+/**
+ * GET /api/ai/agent-ask?connectionId=..&question=..
+ * Runs the ReAct agent and streams its reasoning trace over SSE, then the
+ * final result. Falls back to the builtin pipeline when no LLM is configured.
+ */
+router.get('/agent-ask', async (req, res) => {
+    const { connectionId, question } = req.query;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (event, data) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let cleanup = () => {};
+    try {
+        if (!connectionId || !question || question.trim().length < 3) {
+            send('error', { error: 'connectionId and a question (min 3 chars) are required' });
+            return res.end();
+        }
+
+        // No LLM? Fall back to the builtin pipeline so the feature still works.
+        if (!(await aiProvider.isEnabled())) {
+            send('status', { stage: 'builtin', message: 'No AI provider configured — using the builtin engine.' });
+            const result = await processQuestion(req.user.id, connectionId, question.trim());
+            send('result', result);
+            return res.end();
+        }
+
+        send('status', { stage: 'starting', message: 'Agent is exploring the database…' });
+
+        const { adapter, cleanup: cl, conn } = await connCtx.openAdapter(connectionId, req.user.id);
+        cleanup = cl;
+        const schema = await adapter.getSchema();
+
+        const result = await aiAgent.run({
+            question: question.trim(),
+            adapter,
+            schema,
+            dbType: conn.db_type,
+            role: req.user.role,
+            onStep: (step) => send('step', step)
+        });
+
+        send('result', result);
+
+        await logFromRequest(req, 'nlq.agent', 'nlq', {
+            connectionId,
+            queryText: result.sql,
+            status: result.success ? 'success' : 'failure',
+            rowsAffected: result.rowCount,
+            details: { question, agent: true, steps: (result.steps || []).length }
+        });
+    } catch (err) {
+        send('error', { error: err.message });
+    } finally {
+        cleanup();
         res.end();
     }
 });

@@ -193,6 +193,13 @@ YDB.NLQ = {
         this._addMessage('user', question);
         input.value = '';
 
+        // Agent mode: stream the reasoning trace over SSE.
+        var agentToggle = document.getElementById('nlq-agent-toggle');
+        if (agentToggle && agentToggle.checked) {
+            this.askAgent(question, connectionId);
+            return;
+        }
+
         // Show loading
         var loadingId = this._addMessage('bot-loading', '');
 
@@ -207,6 +214,79 @@ YDB.NLQ = {
                 self._removeMessage(loadingId);
                 self._addMessage('bot-error', err.message || 'Maaf, gagal memproses soalan anda.');
             });
+    },
+
+    /**
+     * Agent mode — stream the ReAct reasoning trace, then render the result.
+     * Uses EventSource against /api/ai/agent-ask (token passed as query param).
+     */
+    askAgent: function (question, connectionId) {
+        var self = this;
+        var traceId = this._addMessage('bot', '<div class="text-xs font-semibold text-primary mb-2 flex items-center gap-1">'
+            + '<span class="loading loading-spinner loading-xs"></span> Agent working…</div>');
+        var msgEl = document.getElementById(traceId);
+        var traceBox = document.createElement('div');
+        traceBox.className = 'space-y-1 mt-1';
+        if (msgEl) msgEl.querySelector('.chat-bubble').appendChild(traceBox);
+
+        var base = (YDB.API.baseURL || '/api') + '/ai/agent-ask';
+        var url = base + '?connectionId=' + encodeURIComponent(connectionId)
+            + '&question=' + encodeURIComponent(question)
+            + '&token=' + encodeURIComponent(YDB.API.token || '');
+
+        var es = new EventSource(url);
+        var stepCount = 0;
+
+        function addTrace(icon, label, detail, color) {
+            var row = document.createElement('div');
+            row.className = 'text-xs flex items-start gap-1 ' + (color || 'text-base-content/70');
+            row.innerHTML = '<span class="font-mono">' + icon + '</span><span>' + YDB.UI.esc(label)
+                + (detail ? ' <span class="opacity-60">' + YDB.UI.esc(detail) + '</span>' : '') + '</span>';
+            traceBox.appendChild(row);
+            var container = document.getElementById('nlq-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        es.addEventListener('status', function (e) {
+            var d = JSON.parse(e.data);
+            addTrace('•', d.message || d.stage, '', 'text-base-content/50');
+        });
+
+        es.addEventListener('step', function (e) {
+            var s = JSON.parse(e.data);
+            if (s.type === 'thought') {
+                stepCount++;
+                addTrace('→', 'Step ' + (s.step || stepCount) + ': ' + (s.tool || ''), s.thought || '', 'text-info');
+            } else if (s.type === 'observation') {
+                var note = s.evaluation || '';
+                addTrace('✓', 'Observed ' + (s.tool || ''), note, 'text-base-content/60');
+            } else if (s.type === 'reject') {
+                addTrace('✗', 'Rejected', s.message, 'text-warning');
+            } else if (s.type === 'final') {
+                addTrace('★', 'Final answer ready', '', 'text-success');
+            } else if (s.type === 'guardrail' || s.type === 'fallback' || s.type === 'note') {
+                addTrace('•', s.message || s.type, '', 'text-base-content/40');
+            }
+        });
+
+        es.addEventListener('result', function (e) {
+            es.close();
+            var result = JSON.parse(e.data);
+            self._removeMessage(traceId);
+            if (result && (result.success || result.sql)) {
+                self._handleResult(result);
+            } else {
+                self._addMessage('bot-error', (result && result.error) || 'Agent could not answer.');
+            }
+        });
+
+        es.addEventListener('error', function (e) {
+            es.close();
+            self._removeMessage(traceId);
+            var msg = 'Agent stream failed.';
+            try { if (e.data) msg = JSON.parse(e.data).error || msg; } catch (x) {}
+            self._addMessage('bot-error', msg);
+        });
     },
 
     /**
