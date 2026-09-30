@@ -11,7 +11,7 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const db = require('../db/pool');
 const config = require('../config');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authenticateScope } = require('../middleware/auth');
 const { validatePassword } = require('../middleware/password-policy');
 
 /**
@@ -136,7 +136,7 @@ router.post('/register', async (req, res) => {
  * Enforces password policy on the new password.
  * Clears force_password_change flag on success.
  */
-router.post('/change-password', authenticate, async (req, res) => {
+router.post('/change-password', authenticateScope('password_change'), async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword) {

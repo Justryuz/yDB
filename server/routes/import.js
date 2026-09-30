@@ -96,12 +96,20 @@ router.post('/execute', async (req, res) => {
             const isMySQL = conn.db_type === 'mysql' || conn.db_type === 'mariadb';
             const q = isMySQL ? '`' : '"'; // Quote character
 
+            // Validate the table name: allow only a safe identifier pattern so it
+            // cannot break out of the quoting and inject SQL.
+            if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(tableName)) {
+                cleanup();
+                return res.status(400).json({ error: 'Invalid table name. Use letters, numbers and underscores only, starting with a letter or underscore.' });
+            }
+            const safeTable = tableName;
+
             // Sanitize column names
             const safeCols = columns.map(c => c.replace(/[^a-zA-Z0-9_]/g, '_'));
 
             // Create table
             const colDefs = safeCols.map(c => `${q}${c}${q} TEXT`).join(', ');
-            await adapter.query(`CREATE TABLE IF NOT EXISTS ${q}${tableName}${q} (${colDefs})`);
+            await adapter.query(`CREATE TABLE IF NOT EXISTS ${q}${safeTable}${q} (${colDefs})`);
 
             // Insert data in batches
             let imported = 0;
@@ -112,7 +120,7 @@ router.post('/execute', async (req, res) => {
                     return `'${String(v).replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
                 }).join(', ');
                 try {
-                    await adapter.query(`INSERT INTO ${q}${tableName}${q} (${safeCols.map(c => q + c + q).join(', ')}) VALUES (${vals})`);
+                    await adapter.query(`INSERT INTO ${q}${safeTable}${q} (${safeCols.map(c => q + c + q).join(', ')}) VALUES (${vals})`);
                     imported++;
                 } catch (insertErr) {
                     // Skip failed rows, continue

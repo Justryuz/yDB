@@ -92,7 +92,27 @@ router.get('/:connectionId/tables/:tableName/data', async (req, res) => {
 
         const client = getClient(conn.db_type);
 
-        const sql = `SELECT * FROM ${tableName} LIMIT ${perPage} OFFSET ${offset}`;
+        const connOpts = {
+            host: conn.host, port: conn.port, user: conn.username, password,
+            database: conn.database_name,
+            endpoints: ((conn.options || {}).endpoints || []), options: conn.options || {}
+        };
+
+        // Validate tableName against the real schema to prevent SQL injection.
+        // Only names that actually exist as tables are allowed through.
+        const schema = await client.getSchemas(connOpts);
+        const knownTables = Object.keys((schema && schema.tables) || {});
+        if (!knownTables.includes(tableName)) {
+            return res.status(400).json({ error: 'Unknown or invalid table name' });
+        }
+
+        // Quote the (now whitelisted) identifier per DB dialect as defense in depth.
+        const isMySQL = conn.db_type === 'mysql' || conn.db_type === 'mariadb';
+        const quoted = isMySQL
+            ? '`' + tableName.replace(/`/g, '``') + '`'
+            : '"' + tableName.replace(/"/g, '""') + '"';
+
+        const sql = `SELECT * FROM ${quoted} LIMIT ${perPage} OFFSET ${offset}`;
         const result = await client.execute(
             { host: conn.host, port: conn.port, user: conn.username, password, database: conn.database_name, endpoints: ((conn.options || {}).endpoints || []), options: conn.options || {} },
             sql
