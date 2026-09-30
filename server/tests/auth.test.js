@@ -19,6 +19,12 @@ jest.mock('../db/pool', () => ({
 const { authenticate, authenticateScope, authorize } = require('../middleware/auth');
 const { validatePassword } = require('../middleware/password-policy');
 const config = require('../config');
+const db = require('../db/pool');
+
+/** Make db.query resolve to an active user with the given token_version. */
+function mockActiveUser(tokenVersion = 0, active = true) {
+    db.query.mockResolvedValue({ rows: [{ active, token_version: tokenVersion }] });
+}
 
 describe('Authentication Middleware', () => {
     let req, res, next;
@@ -30,52 +36,80 @@ describe('Authentication Middleware', () => {
             json: jest.fn().mockReturnThis()
         };
         next = jest.fn();
+        db.query.mockReset();
+        mockActiveUser(0);
     });
 
-    test('returns 401 when no token provided', () => {
-        authenticate(req, res, next);
+    test('returns 401 when no token provided', async () => {
+        await authenticate(req, res, next);
         expect(res.status).toHaveBeenCalledWith(401);
         expect(res.json).toHaveBeenCalledWith({ error: 'Authentication required' });
         expect(next).not.toHaveBeenCalled();
     });
 
-    test('returns 401 for invalid token', () => {
+    test('returns 401 for invalid token', async () => {
         req.headers.authorization = 'Bearer invalid-token';
-        authenticate(req, res, next);
+        await authenticate(req, res, next);
         expect(res.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
     });
 
-    test('accepts valid Bearer token', () => {
-        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, config.jwt.secret);
+    test('accepts valid Bearer token', async () => {
+        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', tv: 0 }, config.jwt.secret);
         req.headers.authorization = `Bearer ${token}`;
-        authenticate(req, res, next);
+        await authenticate(req, res, next);
         expect(next).toHaveBeenCalled();
         expect(req.user.id).toBe(1);
         expect(req.user.role).toBe('admin');
     });
 
-    test('accepts token from query param (SSE support)', () => {
-        const token = jwt.sign({ id: 2, username: 'user', role: 'viewer' }, config.jwt.secret);
+    test('accepts token from query param (SSE support)', async () => {
+        const token = jwt.sign({ id: 2, username: 'user', role: 'viewer', tv: 0 }, config.jwt.secret);
         req.query.token = token;
-        authenticate(req, res, next);
+        await authenticate(req, res, next);
         expect(next).toHaveBeenCalled();
         expect(req.user.id).toBe(2);
     });
 
-    test('returns 401 for expired token', () => {
+    test('returns 401 for expired token', async () => {
         const token = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, config.jwt.secret, { expiresIn: '0s' });
         req.headers.authorization = `Bearer ${token}`;
-        // Need a small delay or set time in the past
-        authenticate(req, res, next);
+        await authenticate(req, res, next);
         expect(res.status).toHaveBeenCalledWith(401);
     });
 
-    test('rejects scoped (limited) token on general endpoints', () => {
+    test('rejects scoped (limited) token on general endpoints', async () => {
         const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', scope: 'password_change' }, config.jwt.secret);
         req.headers.authorization = `Bearer ${token}`;
-        authenticate(req, res, next);
+        await authenticate(req, res, next);
         expect(res.status).toHaveBeenCalledWith(403);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    test('rejects a token for a disabled account', async () => {
+        mockActiveUser(0, false);
+        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', tv: 0 }, config.jwt.secret);
+        req.headers.authorization = `Bearer ${token}`;
+        await authenticate(req, res, next);
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    test('rejects a token whose version is stale (revoked)', async () => {
+        mockActiveUser(3); // current version is 3
+        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', tv: 2 }, config.jwt.secret);
+        req.headers.authorization = `Bearer ${token}`;
+        await authenticate(req, res, next);
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    test('rejects a token whose account no longer exists', async () => {
+        db.query.mockResolvedValue({ rows: [] });
+        const token = jwt.sign({ id: 99, username: 'ghost', role: 'admin', tv: 0 }, config.jwt.secret);
+        req.headers.authorization = `Bearer ${token}`;
+        await authenticate(req, res, next);
+        expect(res.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
     });
 });
@@ -87,33 +121,35 @@ describe('Scoped Authentication Middleware', () => {
         req = { headers: {}, query: {}, socket: { remoteAddress: '127.0.0.1' } };
         res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
         next = jest.fn();
+        db.query.mockReset();
+        mockActiveUser(0);
     });
 
-    test('accepts a token carrying the required scope', () => {
-        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', scope: 'password_change' }, config.jwt.secret);
+    test('accepts a token carrying the required scope', async () => {
+        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', tv: 0, scope: 'password_change' }, config.jwt.secret);
         req.headers.authorization = `Bearer ${token}`;
-        authenticateScope('password_change')(req, res, next);
+        await authenticateScope('password_change')(req, res, next);
         expect(next).toHaveBeenCalled();
         expect(req.user.id).toBe(1);
     });
 
-    test('accepts a full (unscoped) token', () => {
-        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, config.jwt.secret);
+    test('accepts a full (unscoped) token', async () => {
+        const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', tv: 0 }, config.jwt.secret);
         req.headers.authorization = `Bearer ${token}`;
-        authenticateScope('password_change')(req, res, next);
+        await authenticateScope('password_change')(req, res, next);
         expect(next).toHaveBeenCalled();
     });
 
-    test('rejects a token with a different scope', () => {
+    test('rejects a token with a different scope', async () => {
         const token = jwt.sign({ id: 1, username: 'admin', role: 'admin', scope: 'something_else' }, config.jwt.secret);
         req.headers.authorization = `Bearer ${token}`;
-        authenticateScope('password_change')(req, res, next);
+        await authenticateScope('password_change')(req, res, next);
         expect(res.status).toHaveBeenCalledWith(403);
         expect(next).not.toHaveBeenCalled();
     });
 
-    test('returns 401 when no token provided', () => {
-        authenticateScope('password_change')(req, res, next);
+    test('returns 401 when no token provided', async () => {
+        await authenticateScope('password_change')(req, res, next);
         expect(res.status).toHaveBeenCalledWith(401);
     });
 });

@@ -28,7 +28,7 @@ router.post('/login', async (req, res) => {
         }
 
         const result = await db.query(
-            'SELECT id, username, email, password_hash, role, active, force_password_change FROM users WHERE username = $1',
+            'SELECT id, username, email, password_hash, role, active, force_password_change, token_version FROM users WHERE username = $1',
             [username]
         );
 
@@ -56,7 +56,7 @@ router.post('/login', async (req, res) => {
         // If forced password change, issue a limited token
         if (user.force_password_change) {
             const limitedToken = jwt.sign(
-                { id: user.id, username: user.username, role: user.role, scope: 'password_change' },
+                { id: user.id, username: user.username, role: user.role, tv: user.token_version, scope: 'password_change' },
                 config.jwt.secret,
                 { expiresIn: '15m' }
             );
@@ -68,15 +68,15 @@ router.post('/login', async (req, res) => {
         }
 
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
+            { id: user.id, username: user.username, role: user.role, tv: user.token_version },
             config.jwt.secret,
             { expiresIn: config.jwt.expiresIn }
         );
 
         const refreshToken = jwt.sign(
-            { id: user.id },
-            config.jwt.secret + '_refresh',
-            { expiresIn: '30d' }
+            { id: user.id, tv: user.token_version },
+            config.jwt.refreshSecret,
+            { expiresIn: config.jwt.refreshExpiresIn }
         );
 
         res.json({
@@ -109,13 +109,13 @@ router.post('/register', async (req, res) => {
 
         const hash = await bcrypt.hash(password, 12);
         const result = await db.query(
-            'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, role',
+            'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, role, token_version',
             [username, email, hash]
         );
 
         const user = result.rows[0];
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
+            { id: user.id, username: user.username, role: user.role, tv: user.token_version },
             config.jwt.secret,
             { expiresIn: config.jwt.expiresIn }
         );
@@ -160,18 +160,20 @@ router.post('/change-password', authenticateScope('password_change'), async (req
             return res.status(401).json({ error: 'Current password is incorrect' });
         }
 
-        // Update password and clear force flag
+        // Update password, clear force flag, and bump token_version so every
+        // previously issued token (including the limited one) is revoked.
         const newHash = await bcrypt.hash(newPassword, 12);
-        await db.query(
-            'UPDATE users SET password_hash = $1, force_password_change = false, updated_at = NOW() WHERE id = $2',
+        const updateResult = await db.query(
+            'UPDATE users SET password_hash = $1, force_password_change = false, token_version = token_version + 1, updated_at = NOW() WHERE id = $2 RETURNING token_version',
             [newHash, req.user.id]
         );
+        const newTokenVersion = updateResult.rows[0].token_version;
 
         await logAudit(req.user.id, 'auth.password_changed', 'users', null, null, req, 'success');
 
         // Issue a full token now that password is changed
         const token = jwt.sign(
-            { id: req.user.id, username: req.user.username, role: req.user.role },
+            { id: req.user.id, username: req.user.username, role: req.user.role, tv: newTokenVersion },
             config.jwt.secret,
             { expiresIn: config.jwt.expiresIn }
         );
@@ -192,16 +194,22 @@ router.post('/refresh', async (req, res) => {
         const { refreshToken } = req.body;
         if (!refreshToken) return res.status(400).json({ error: 'Refresh token required' });
 
-        const payload = jwt.verify(refreshToken, config.jwt.secret + '_refresh');
+        const payload = jwt.verify(refreshToken, config.jwt.refreshSecret);
 
-        const result = await db.query('SELECT id, username, role, active FROM users WHERE id = $1', [payload.id]);
+        const result = await db.query('SELECT id, username, role, active, token_version FROM users WHERE id = $1', [payload.id]);
         if (!result.rows.length || !result.rows[0].active) {
             return res.status(403).json({ error: 'Account disabled or not found' });
         }
 
         const user = result.rows[0];
+
+        // Reject refresh tokens that were revoked by a token_version bump.
+        if (payload.tv !== undefined && payload.tv !== user.token_version) {
+            return res.status(401).json({ error: 'Refresh token has been revoked. Please log in again.' });
+        }
+
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
+            { id: user.id, username: user.username, role: user.role, tv: user.token_version },
             config.jwt.secret,
             { expiresIn: config.jwt.expiresIn }
         );

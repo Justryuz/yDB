@@ -21,9 +21,15 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) DEFAULT 'viewer' CHECK (role IN ('admin', 'editor', 'viewer')),
     active BOOLEAN DEFAULT true,
     force_password_change BOOLEAN DEFAULT false,
+    token_version INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Ensure token_version exists on databases created before it was added.
+-- Bumping this value invalidates all previously issued tokens for a user
+-- (used on account disable and password change).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0;
 
 -- Saved database connections
 CREATE TABLE IF NOT EXISTS connections (

@@ -4,6 +4,7 @@
  */
 
 const BaseAdapter = require('./base');
+const { resolveSsl } = require('./ssl');
 
 class MySQLAdapter extends BaseAdapter {
     async connect() {
@@ -17,24 +18,15 @@ class MySQLAdapter extends BaseAdapter {
             connectTimeout: 15000
         };
 
-        // Only enable SSL if explicitly requested via options
-        if (this.opts.ssl === true) {
-            connOpts.ssl = { rejectUnauthorized: false };
+        // Enable SSL only when requested. Verification is ON by default;
+        // callers opt into insecure/self-signed via sslRejectUnauthorized:false.
+        if (this.opts.ssl === true || this.opts.sslRejectUnauthorized === false || this.opts.sslInsecure === true || this.opts.sslCa) {
+            const ssl = resolveSsl(this.opts);
+            if (ssl) connOpts.ssl = ssl;
         }
 
-        try {
-            this.connection = await mysql.createConnection(connOpts);
-            this.connected = true;
-        } catch (err) {
-            // If connection fails without SSL, try with SSL (some cloud DBs require it)
-            if (!connOpts.ssl && err.message && err.message.includes('SSL')) {
-                connOpts.ssl = { rejectUnauthorized: false };
-                this.connection = await mysql.createConnection(connOpts);
-                this.connected = true;
-            } else {
-                throw err;
-            }
-        }
+        this.connection = await mysql.createConnection(connOpts);
+        this.connected = true;
     }
 
     async query(sql) {
@@ -88,14 +80,19 @@ class MySQLAdapter extends BaseAdapter {
                 if (threadId) {
                     // Need a separate connection to issue KILL
                     const mysql = require('mysql2/promise');
-                    const killConn = await mysql.createConnection({
+                    const killOpts = {
                         host: this.opts.host,
                         port: this.opts.port,
                         user: this.opts.user,
                         password: this.opts.password,
                         database: this.opts.database,
                         connectTimeout: 5000
-                    });
+                    };
+                    if (this.opts.ssl === true || this.opts.sslRejectUnauthorized === false || this.opts.sslInsecure === true || this.opts.sslCa) {
+                        const ssl = resolveSsl(this.opts);
+                        if (ssl) killOpts.ssl = ssl;
+                    }
+                    const killConn = await mysql.createConnection(killOpts);
                     await killConn.query(`KILL QUERY ${threadId}`);
                     await killConn.end();
                 }

@@ -6,7 +6,10 @@ module.exports = {
         'middleware/**/*.js',
         'services/audit-log.js',
         'services/backup.js',
+        'services/crypto.js',
+        'services/ssrf-guard.js',
         'services/adapters/base.js',
+        'services/adapters/ssl.js',
         'services/adapters/postgresql.js',
         'services/adapters/mysql.js',
         '!**/node_modules/**'

@@ -4,6 +4,7 @@
  */
 
 const BaseAdapter = require('./base');
+const { resolveSsl } = require('./ssl');
 
 class PostgreSQLAdapter extends BaseAdapter {
     async connect() {
@@ -16,22 +17,18 @@ class PostgreSQLAdapter extends BaseAdapter {
             database: this.opts.database,
             connectionTimeoutMillis: 15000,
             statement_timeout: 60000,
-            // Enable SSL for cloud-hosted PostgreSQL (Aiven, Supabase, Neon, RDS, etc.)
-            ssl: this.opts.ssl === false ? undefined : { rejectUnauthorized: false }
+            ssl: resolveSsl(this.opts)
         };
 
         try {
             this.connection = new Client(connOpts);
             await this.connection.connect();
         } catch (err) {
-            // If SSL fails, retry without SSL (local databases)
-            if (connOpts.ssl && (err.message.includes('SSL') || err.message.includes('self-signed'))) {
+            // If the server does not speak SSL at all, retry in plaintext — but
+            // only when SSL was not explicitly required by the caller.
+            const sslNotSupported = /server does not support SSL|not support SSL connection/i.test(err.message || '');
+            if (connOpts.ssl && sslNotSupported && this.opts.ssl !== true) {
                 delete connOpts.ssl;
-                this.connection = new Client(connOpts);
-                await this.connection.connect();
-            } else if (!connOpts.ssl) {
-                // If no SSL fails, try with SSL (cloud databases require it)
-                connOpts.ssl = { rejectUnauthorized: false };
                 this.connection = new Client(connOpts);
                 await this.connection.connect();
             } else {

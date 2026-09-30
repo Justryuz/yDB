@@ -70,7 +70,13 @@ router.patch('/:id', async (req, res) => {
         const changes = {};
 
         if (active !== undefined) {
-            await db.query('UPDATE users SET active = $1, updated_at = NOW() WHERE id = $2', [active, req.params.id]);
+            // Disabling an account also bumps token_version to revoke any
+            // tokens already issued to that user.
+            if (active === false) {
+                await db.query('UPDATE users SET active = $1, token_version = token_version + 1, updated_at = NOW() WHERE id = $2', [active, req.params.id]);
+            } else {
+                await db.query('UPDATE users SET active = $1, updated_at = NOW() WHERE id = $2', [active, req.params.id]);
+            }
             changes.active = active;
         }
         if (role) {
