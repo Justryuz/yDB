@@ -607,6 +607,7 @@
                             <button class="tab" data-subtab="procs">Procedures</button>
                             <button class="tab" data-subtab="notifications">Alerts</button>
                             <button class="tab" data-subtab="plugins">Plugins</button>
+                            <button class="tab" data-subtab="ai"><i data-lucide="sparkles" class="w-3 h-3 mr-1"></i>AI</button>
                         </div>
                     </div>
                     <div class="flex-1 overflow-auto p-3">
@@ -681,6 +682,45 @@
                         <!-- Plugins -->
                         <div class="admin-sub" id="sub-plugins" style="display:none;">
                             <div id="plugins-list"></div>
+                        </div>
+                        <!-- AI Settings -->
+                        <div class="admin-sub" id="sub-ai" style="display:none;">
+                            <div class="max-w-xl">
+                                <h3 class="font-semibold text-sm mb-1 flex items-center gap-1"><i data-lucide="sparkles" class="w-4 h-4"></i> AI Provider</h3>
+                                <p class="text-xs text-base-content/60 mb-3">Choose which AI powers Text-to-SQL, the SQL assistant, error explanations, schema docs and index advice. The builtin engine works offline with no key.</p>
+                                <div class="form-control mb-2">
+                                    <label class="label py-1"><span class="label-text text-xs">Provider</span></label>
+                                    <select class="select select-sm select-bordered" id="ai-provider"></select>
+                                </div>
+                                <div class="form-control mb-2">
+                                    <label class="label py-1"><span class="label-text text-xs">Model</span></label>
+                                    <input class="input input-sm input-bordered" id="ai-model" list="ai-model-presets" placeholder="(provider default)">
+                                    <datalist id="ai-model-presets"></datalist>
+                                </div>
+                                <div class="form-control mb-2" id="ai-region-wrap" style="display:none;">
+                                    <label class="label py-1"><span class="label-text text-xs">AWS Region (Bedrock)</span></label>
+                                    <input class="input input-sm input-bordered" id="ai-region" placeholder="us-east-1">
+                                </div>
+                                <div class="form-control mb-2" id="ai-baseurl-wrap" style="display:none;">
+                                    <label class="label py-1"><span class="label-text text-xs">Base URL (OpenAI-compatible)</span></label>
+                                    <input class="input input-sm input-bordered" id="ai-baseurl" placeholder="https://api.openai.com/v1">
+                                </div>
+                                <div class="form-control mb-2" id="ai-apikey-wrap" style="display:none;">
+                                    <label class="label py-1"><span class="label-text text-xs">API Key</span></label>
+                                    <input type="password" class="input input-sm input-bordered" id="ai-apikey" placeholder="Enter to set/replace — leave blank to keep">
+                                    <span class="text-xs text-base-content/50 mt-1" id="ai-apikey-hint"></span>
+                                </div>
+                                <div class="form-control mb-3" id="ai-bedrock-token-wrap" style="display:none;">
+                                    <label class="label py-1"><span class="label-text text-xs">Bedrock Bearer Token (optional)</span></label>
+                                    <input type="password" class="input input-sm input-bordered" id="ai-bedrock-token" placeholder="Leave blank to use IAM credentials / keep existing">
+                                </div>
+                                <div class="flex gap-2 items-center">
+                                    <button class="btn btn-primary btn-sm" id="btn-ai-save"><i data-lucide="save" class="w-4 h-4"></i>Save</button>
+                                    <button class="btn btn-ghost btn-sm" id="btn-ai-test"><i data-lucide="plug" class="w-4 h-4"></i>Test</button>
+                                    <span class="text-xs" id="ai-test-result"></span>
+                                </div>
+                                <div class="text-xs text-base-content/50 mt-3" id="ai-cache-stats"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1036,6 +1076,7 @@
     <script src="js/plugins.js"></script>
     <script src="js/api-client.js"></script>
     <script src="js/nlq.js"></script>
+    <script src="js/ai-settings.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

@@ -71,6 +71,7 @@
         YDB.Plugins.init();
         YDB.APIClient.init();
         YDB.NLQ.init();
+        YDB.AISettings.init();
 
         // ── 7. Admin Sub-tab Navigation ───────────────────────
         _initAdminSubtabs();
@@ -111,7 +112,8 @@
                     migration: function () { YDB.Migration.populateSelects(); },
                     procs: function () { YDB.StoredProcs.render(); },
                     notifications: function () { YDB.Notifications.render(); },
-                    plugins: function () { YDB.Plugins.render(); }
+                    plugins: function () { YDB.Plugins.render(); },
+                    ai: function () { YDB.AISettings.load(); }
                 };
                 if (populators[sub]) populators[sub]();
             });

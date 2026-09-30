@@ -211,16 +211,26 @@ Question -> Intent Detection -> Schema Intelligence -> Query Plan -> SQL -> Vali
 
 | Mode | When | Speed | Accuracy |
 |---|---|---|---|
-| **Builtin Heuristic** (default) | `NLQ_PROVIDER=builtin` or unset | ~50ms | Good for common patterns |
-| **LLM Pipeline** | `NLQ_PROVIDER=openai` or `bedrock` | 1-3s | Excellent, handles complex queries |
+| **Builtin Heuristic** (default) | provider `builtin` or unset | ~50ms | Good for common patterns |
+| **LLM Pipeline** | provider `bedrock` / `openai` / `anthropic` / `gemini` | 1-3s | Excellent, handles complex queries |
 
 ### LLM Pipeline Features (when configured)
 
 - **DDL Context**: Full CREATE TABLE statements sent to LLM for accurate SQL
 - **Vector Store Retrieval**: Finds 3 most similar past Q&A pairs as few-shot examples
 - **Self-Correction**: If SQL fails, auto-retries with error message context (max 2 attempts)
+- **Response Caching**: Identical prompts are cached (LRU + TTL) to cut cost and latency
+- **Automatic Fallback**: If the LLM is unavailable or errors, the builtin engine answers instead
 - **Learning**: Successful queries stored in `nlq-training.json` for future reference
 - **Sensitive Data Protection**: Blocks password/token queries, excludes sensitive columns
+
+### More AI Tools (share the same provider)
+
+- **SQL Assistant** — fix, explain, optimize, and generate SQL (`/api/ai/sql-*`)
+- **Error Explainer** — plain-language cause + fix for a failed query (`/api/ai/explain-error`)
+- **Schema Documentation** — auto-generated table/column descriptions (`/api/ai/document-schema`)
+- **Index / Performance Advisor** — index and rewrite recommendations, optionally from `EXPLAIN` (`/api/ai/advise-indexes`)
+- **Streaming Answers** — SSE progress + result for Copilot (`/api/ai/ask-stream`)
 
 ### Core Features
 
@@ -250,21 +260,40 @@ Question -> Intent Detection -> Schema Intelligence -> Query Plan -> SQL -> Vali
 
 ### AI Provider Configuration
 
+Configure the provider once and every AI feature (Copilot, SQL assistant, error
+explainer, schema docs, index advisor) uses it. Two ways to configure:
+
+1. **From the app (recommended)** — sign in as admin, open **Admin → AI**, pick a
+   provider and model, paste an API key, and hit **Test**. Stored in the database
+   and takes effect immediately (no restart).
+2. **Environment defaults** — set these in `.env` (leave `NLQ_MODEL` blank to use
+   the provider's default model):
+
 ```env
 # Built-in heuristic (default, no API key needed, instant)
 NLQ_PROVIDER=builtin
 
-# Amazon Bedrock (Claude) — full LLM pipeline with self-correction
+# Amazon Bedrock — IAM credentials or a bearer token
 NLQ_PROVIDER=bedrock
-NLQ_MODEL=anthropic.claude-3-haiku-20240307-v1:0
 NLQ_REGION=us-east-1
+AWS_BEARER_TOKEN_BEDROCK=
 
-# OpenAI compatible — full LLM pipeline with self-correction
+# OpenAI (or OpenAI-compatible)
 NLQ_PROVIDER=openai
 NLQ_API_KEY=sk-...
-NLQ_MODEL=gpt-4o-mini
 NLQ_BASE_URL=https://api.openai.com/v1
+
+# Anthropic (direct API)
+NLQ_PROVIDER=anthropic
+NLQ_API_KEY=sk-ant-...
+
+# Google Gemini
+NLQ_PROVIDER=gemini
+NLQ_API_KEY=...
 ```
+
+Supported providers: `builtin`, `bedrock`, `openai`, `anthropic`, `gemini`.
+API keys set via the Admin UI are never returned to the browser (only a masked hint).
 
 ## Tech Stack
 
@@ -318,6 +347,11 @@ NLQ_BASE_URL=https://api.openai.com/v1
 | POST | `/api/federated/execute` | Cross-DB join (DuckDB) |
 | **POST** | **`/api/nlq/ask`** | **Copilot — natural language → SQL → results** |
 | **POST** | **`/api/nlq/suggest`** | **Get suggested questions for a connection** |
+| GET | `/api/ai/ask-stream` | Copilot answer streamed over SSE |
+| POST | `/api/ai/explain-error` | Explain a failed query + suggest a fix |
+| POST | `/api/ai/document-schema` | Auto-generate schema documentation |
+| POST | `/api/ai/advise-indexes` | Index / performance recommendations |
+| GET/PUT | `/api/settings/ai` | View / update AI provider config (admin) |
 | GET | `/api/explorer/:id/schema` | Get database schema |
 | GET | `/api/stream/query` | SSE streaming results |
 | POST | `/api/stream/cancel` | Cancel streaming query |
