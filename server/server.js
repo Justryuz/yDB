@@ -64,6 +64,8 @@ app.use('/api/audit', require('./routes/audit'));
 app.use('/api/stream', require('./routes/stream'));
 app.use('/api/federated', require('./routes/federated'));
 app.use('/api/nlq', require('./routes/nlq'));
+app.use('/api/settings', require('./routes/settings'));
+app.use('/api/ai', require('./routes/ai'));
 
 // AI JOIN suggestions
 const aiJoins = require('./services/ai-joins');
