@@ -4,24 +4,13 @@
  */
 
 const express = require('express');
-const crypto = require('crypto');
 const router = express.Router();
 const db = require('../db/pool');
-const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getClient } = require('../services/db-clients');
+const { decrypt } = require('../services/crypto');
 
 router.use(authenticate);
-
-function decrypt(text) {
-    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-    const [ivHex, encrypted] = text.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-}
 
 /**
  * GET /api/explorer/:connectionId/schema

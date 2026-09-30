@@ -20,8 +20,8 @@
  *  - Backward compatible: same public API (NLQEngine, processQuestion)
  */
 
-const crypto = require('crypto');
 const config = require('../config');
+const { decrypt } = require('./crypto');
 const db = require('../db/pool');
 const poolManager = require('./pool-manager');
 const { withTunnel } = require('./ssh-tunnel');
@@ -824,14 +824,6 @@ USER QUESTION: "${question}"`;
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 12: PIPELINE (processQuestion - backward compatible)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-function decrypt(text) {
-    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-    const [ivHex, encrypted] = text.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    return decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-}
 
 async function processQuestion(userId, connectionId, question) {
     // 1. Get connection

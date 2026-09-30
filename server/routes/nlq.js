@@ -64,8 +64,7 @@ router.post('/suggest', async (req, res) => {
         }
 
         const db = require('../db/pool');
-        const crypto = require('crypto');
-        const config = require('../config');
+        const { decrypt } = require('../services/crypto');
         const poolManager = require('../services/pool-manager');
         const { withTunnel } = require('../services/ssh-tunnel');
 
@@ -80,13 +79,7 @@ router.post('/suggest', async (req, res) => {
         const conn = connResult.rows[0];
         let password = '';
         try {
-            const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-            if (conn.password_encrypted) {
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) { /* proceed without password */ }
 
         const options = conn.options || {};

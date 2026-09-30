@@ -5,28 +5,17 @@
  */
 
 const express = require('express');
-const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const db = require('../db/pool');
-const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const poolManager = require('../services/pool-manager');
 const { withTunnel } = require('../services/ssh-tunnel');
 const { logFromRequest } = require('../services/audit-log');
+const { decrypt } = require('../services/crypto');
 
 /** Track active streaming executions */
 const activeStreams = new Map();
-
-function decrypt(text) {
-    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-    const [ivHex, encrypted] = text.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-}
 
 /**
  * GET /api/stream/query

@@ -6,34 +6,14 @@
 
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
 const db = require('../db/pool');
-const config = require('../config');
 const { authenticate } = require('../middleware/auth');
 const { getClient } = require('../services/db-clients');
 const { logFromRequest } = require('../services/audit-log');
+const { encrypt, decrypt } = require('../services/crypto');
+const { assertHostAllowed } = require('../services/ssrf-guard');
 
 router.use(authenticate);
-
-// ── Encryption helpers ────────────────────────────────────
-function encrypt(text) {
-    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-}
-
-function decrypt(text) {
-    const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-    const [ivHex, encrypted] = text.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-}
 
 /**
  * GET /api/connections
@@ -134,6 +114,13 @@ router.post('/test', async (req, res) => {
             return res.status(400).json({ success: false, message: 'db_type and host required' });
         }
 
+        // SSRF guard: block metadata endpoint (and private hosts if configured).
+        try {
+            await assertHostAllowed(host);
+        } catch (guardErr) {
+            return res.status(400).json({ success: false, message: guardErr.message });
+        }
+
         const client = getClient(db_type);
         const success = await client.testConnection({
             host,
@@ -162,6 +149,14 @@ router.post('/:id/test', async (req, res) => {
         if (!result.rows.length) return res.status(404).json({ error: 'Connection not found' });
 
         const conn = result.rows[0];
+
+        // SSRF guard: block metadata endpoint (and private hosts if configured).
+        try {
+            await assertHostAllowed(conn.host);
+        } catch (guardErr) {
+            return res.status(400).json({ success: false, message: guardErr.message });
+        }
+
         const password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
 
         const client = getClient(conn.db_type);

@@ -18,6 +18,7 @@ const app = express();
 // ── Auth middleware (used across routes) ──────────────────
 const { authenticate, authorize } = require('./middleware/auth');
 const poolManager = require('./services/pool-manager');
+const { decrypt } = require('./services/crypto');
 
 // ── Security & Middleware ──────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -76,16 +77,9 @@ app.post('/api/ai/suggest-joins', authenticate, async (req, res) => {
         if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
 
         const conn = connResult.rows[0];
-        const crypto = require('crypto');
         let password = '';
         try {
-            if (conn.password_encrypted) {
-                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) {}
 
         const options = conn.options || {};
@@ -113,16 +107,9 @@ app.post('/api/ai/natural-join', authenticate, async (req, res) => {
         if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
 
         const conn = connResult.rows[0];
-        const crypto = require('crypto');
         let password = '';
         try {
-            if (conn.password_encrypted) {
-                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) {}
 
         const options = conn.options || {};
@@ -150,16 +137,9 @@ app.post('/api/ai/compatible-columns', authenticate, async (req, res) => {
         if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
 
         const conn = connResult.rows[0];
-        const crypto = require('crypto');
         let password = '';
         try {
-            if (conn.password_encrypted) {
-                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) {}
 
         const options = conn.options || {};
@@ -245,16 +225,9 @@ async function _getSchemaForConnection(userId, connectionId) {
     if (!connResult.rows.length) return { tables: {} };
 
     const conn = connResult.rows[0];
-    const crypto = require('crypto');
     let password = '';
     try {
-        if (conn.password_encrypted) {
-            const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-            const [ivHex, encrypted] = conn.password_encrypted.split(':');
-            const iv = Buffer.from(ivHex, 'hex');
-            const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-            password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-        }
+        password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
     } catch (e) {}
 
     const options = conn.options || {};
@@ -365,16 +338,9 @@ app.post('/api/ai/data-quality', authenticate, async (req, res) => {
         if (!connResult.rows.length) return res.status(404).json({ error: 'Connection not found' });
 
         const conn = connResult.rows[0];
-        const crypto = require('crypto');
         let password = '';
         try {
-            if (conn.password_encrypted) {
-                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) {}
 
         const options = conn.options || {};

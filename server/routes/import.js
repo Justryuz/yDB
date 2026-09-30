@@ -8,6 +8,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
+const { decrypt } = require('../services/crypto');
 
 router.use(authenticate);
 
@@ -63,8 +64,6 @@ router.post('/execute', async (req, res) => {
             return res.status(400).json({ error: 'connectionId, tableName, columns, and data required' });
         }
 
-        const crypto = require('crypto');
-        const config = require('../config');
         const db = require('../db/pool');
         const poolManager = require('../services/pool-manager');
         const { withTunnel } = require('../services/ssh-tunnel');
@@ -76,13 +75,7 @@ router.post('/execute', async (req, res) => {
         const conn = connResult.rows[0];
         let password = '';
         try {
-            if (conn.password_encrypted) {
-                const key = crypto.scryptSync(config.encryptionKey, 'salt', 32);
-                const [ivHex, encrypted] = conn.password_encrypted.split(':');
-                const iv = Buffer.from(ivHex, 'hex');
-                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                password = decipher.update(encrypted, 'hex', 'utf8') + decipher.final('utf8');
-            }
+            password = conn.password_encrypted ? decrypt(conn.password_encrypted) : '';
         } catch (e) { return res.status(500).json({ error: 'Failed to decrypt credentials' }); }
 
         const options = conn.options || {};
