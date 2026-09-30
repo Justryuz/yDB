@@ -9,6 +9,8 @@ YDB.SQLEditor = {
         document.getElementById('btn-ai-explain').addEventListener('click', function () { self.aiExplain(); });
         document.getElementById('btn-ai-optimize').addEventListener('click', function () { self.aiOptimize(); });
         document.getElementById('btn-ai-generate').addEventListener('click', function () { self.aiGenerate(); });
+        document.getElementById('btn-ai-indexes').addEventListener('click', function () { self.aiIndexes(); });
+        document.getElementById('btn-ai-docs').addEventListener('click', function () { self.aiDocs(); });
         document.getElementById('btn-add-tab').addEventListener('click', function () { self.addTab(); });
         document.getElementById('sql-input').addEventListener('keydown', function (e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); self.execute(); }
@@ -59,9 +61,12 @@ YDB.SQLEditor = {
                     YDB.UI.toast('Executed: ' + result.rowCount + ' rows in ' + result.duration + 'ms', 'success');
                 })
                 .catch(function (err) {
+                    var safeErr = err.message.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                     container.innerHTML = '<div class="bg-error/10 border border-error/30 rounded-lg p-3 m-2 text-sm">'
-                        + '<div class="text-error font-medium mb-1">' + err.message + '</div>'
-                        + '<button class="btn btn-sm btn-outline btn-primary mt-1" onclick="YDB.SQLEditor.aiFix(document.getElementById(\'sql-input\').value, \'' + err.message.replace(/'/g, "\\'") + '\')"><i data-lucide="sparkles" class="w-3 h-3"></i> AI Fix</button>'
+                        + '<div class="text-error font-medium mb-1">' + YDB.UI.esc(err.message) + '</div>'
+                        + '<div class="flex gap-2 mt-1">'
+                        + '<button class="btn btn-sm btn-outline btn-primary" onclick="YDB.SQLEditor.aiExplainError(document.getElementById(\'sql-input\').value, \'' + safeErr + '\')"><i data-lucide="sparkles" class="w-3 h-3"></i> Explain &amp; Fix</button>'
+                        + '</div>'
                         + '</div>';
                     YDB.UI.icons();
                 });
@@ -244,5 +249,130 @@ YDB.SQLEditor = {
             h += '</div>';
             el.innerHTML = h;
         }).catch(function (err) { YDB.UI.toast('AI fix unavailable', 'error'); });
+    },
+
+    /**
+     * Explain a failed query in plain language and suggest a fix.
+     * Uses the richer /ai/explain-error endpoint (cause + fix + corrected SQL).
+     */
+    aiExplainError: function (sql, error) {
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+        var el = document.getElementById('sql-results');
+
+        YDB.UI.toast('AI analyzing the error...', 'info');
+        YDB.API.post('/ai/explain-error', { connectionId: connId, sql: sql, error: error }).then(function (result) {
+            var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
+            h += '<div class="font-semibold text-primary mb-2 flex items-center gap-1"><i data-lucide="sparkles" class="w-4 h-4"></i> AI Error Explanation</div>';
+            if (result.cause) {
+                h += '<div class="text-xs text-base-content/60 mb-1">What went wrong:</div>';
+                h += '<div class="text-xs text-base-content/90 leading-relaxed mb-3">' + YDB.SQLEditor._md(result.cause) + '</div>';
+            }
+            if (result.fix) {
+                h += '<div class="text-xs text-base-content/60 mb-1">How to fix:</div>';
+                h += '<div class="text-xs text-base-content/90 leading-relaxed mb-3">' + YDB.SQLEditor._md(result.fix) + '</div>';
+            }
+            if (result.sql && result.sql !== sql) {
+                h += '<div class="text-xs text-base-content/60 mb-1">Corrected SQL:</div>';
+                h += '<pre class="bg-base-300 rounded p-3 text-xs font-mono text-success mb-2 whitespace-pre-wrap max-h-40 overflow-auto">' + YDB.UI.esc(result.sql) + '</pre>';
+                h += '<button class="btn btn-primary btn-xs" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Applied\',\'success\')" data-sql="' + result.sql.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">Apply Corrected SQL</button>';
+            }
+            if (result.provider === 'builtin') {
+                h += '<div class="text-[10px] text-base-content/40 mt-3">Offline analysis (no AI provider configured).</div>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+            YDB.UI.icons();
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
+    },
+
+    /**
+     * Ask the AI for index / performance recommendations for the current query.
+     * Runs EXPLAIN on the server when a connection is selected.
+     */
+    aiIndexes: function () {
+        var sql = document.getElementById('sql-input').value.trim();
+        if (!sql) { YDB.UI.toast('Enter a query first', 'warning'); return; }
+        var conn = YDB.State.activeConnection;
+        var connId = conn ? conn.id : null;
+        var el = document.getElementById('sql-results');
+
+        YDB.UI.toast('AI analyzing performance...', 'info');
+        YDB.API.post('/ai/advise-indexes', { connectionId: connId, sql: sql, runExplain: !!connId }).then(function (result) {
+            var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
+            h += '<div class="font-semibold text-primary mb-2 flex items-center gap-1"><i data-lucide="gauge" class="w-4 h-4"></i> Index &amp; Performance Advice</div>';
+            if (result.summary) {
+                h += '<div class="text-xs text-base-content/80 mb-3">' + YDB.SQLEditor._md(result.summary) + '</div>';
+            }
+            var recs = result.recommendations || [];
+            if (recs.length) {
+                h += '<div class="space-y-2">';
+                recs.forEach(function (r) {
+                    var badge = r.type === 'index' ? 'badge-primary' : 'badge-secondary';
+                    h += '<div class="border border-base-300 rounded p-2">';
+                    h += '<span class="badge badge-xs ' + badge + ' mb-1">' + YDB.UI.esc(r.type || 'tip') + '</span>';
+                    h += '<div class="text-xs text-base-content/90 mb-1">' + YDB.UI.esc(r.detail || '') + '</div>';
+                    if (r.ddl) {
+                        h += '<pre class="bg-base-300 rounded p-2 text-xs font-mono text-success whitespace-pre-wrap">' + YDB.UI.esc(r.ddl) + '</pre>';
+                        h += '<button class="btn btn-ghost btn-xs mt-1" onclick="document.getElementById(\'sql-input\').value=this.dataset.sql;YDB.UI.toast(\'Loaded into editor\',\'success\')" data-sql="' + r.ddl.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">Use this DDL</button>';
+                    }
+                    h += '</div>';
+                });
+                h += '</div>';
+            } else {
+                h += '<div class="text-xs text-base-content/60">No recommendations.</div>';
+            }
+            if (result.provider === 'builtin') {
+                h += '<div class="text-[10px] text-base-content/40 mt-3">Offline analysis (no AI provider configured).</div>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+            YDB.UI.icons();
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
+    },
+
+    /**
+     * Generate documentation for the active connection's schema.
+     */
+    aiDocs: function () {
+        var conn = YDB.State.activeConnection;
+        if (!conn || !conn.id) { YDB.UI.toast('Select a connection first', 'warning'); return; }
+        var el = document.getElementById('sql-results');
+
+        YDB.UI.toast('AI documenting schema...', 'info');
+        YDB.API.post('/ai/document-schema', { connectionId: conn.id }).then(function (result) {
+            var tables = (result && result.tables) || {};
+            var names = Object.keys(tables);
+            var h = '<div class="bg-base-200 rounded-lg p-4 m-2 text-sm">';
+            h += '<div class="font-semibold text-primary mb-2 flex items-center gap-1"><i data-lucide="book-open" class="w-4 h-4"></i> Schema Documentation</div>';
+            if (!names.length) {
+                h += '<div class="text-xs text-base-content/60">No tables found.</div>';
+            } else {
+                h += '<div class="space-y-3 max-h-96 overflow-auto">';
+                names.forEach(function (t) {
+                    var info = tables[t] || {};
+                    h += '<div class="border border-base-300 rounded p-2">';
+                    h += '<div class="font-mono font-semibold text-xs text-secondary">' + YDB.UI.esc(t) + '</div>';
+                    if (info.purpose) h += '<div class="text-xs text-base-content/70 mb-1">' + YDB.UI.esc(info.purpose) + '</div>';
+                    var cols = info.columns || {};
+                    var colNames = Object.keys(cols);
+                    if (colNames.length) {
+                        h += '<ul class="text-xs text-base-content/80 ml-3 space-y-0.5">';
+                        colNames.forEach(function (c) {
+                            h += '<li><span class="font-mono text-primary">' + YDB.UI.esc(c) + '</span> — ' + YDB.UI.esc(cols[c]) + '</li>';
+                        });
+                        h += '</ul>';
+                    }
+                    h += '</div>';
+                });
+                h += '</div>';
+            }
+            if (result.provider === 'builtin') {
+                h += '<div class="text-[10px] text-base-content/40 mt-3">Offline analysis (no AI provider configured).</div>';
+            }
+            h += '</div>';
+            el.innerHTML = h;
+            YDB.UI.icons();
+        }).catch(function (err) { YDB.UI.toast('AI error: ' + err.message, 'error'); });
     }
 };
