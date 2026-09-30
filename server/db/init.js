@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS app_setup (
     completed_by INTEGER
 );
 
+-- Application settings (key/value JSON) — e.g. AI provider configuration.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL DEFAULT '{}',
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_connections_user ON connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_saved_queries_user ON saved_queries(user_id);

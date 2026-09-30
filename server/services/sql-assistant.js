@@ -13,7 +13,7 @@
  *  - generate: Takes natural language → returns SQL (uses NLQ engine)
  */
 
-const config = require('../config');
+const aiProvider = require('./ai-provider');
 
 class SQLAssistant {
     constructor(schema, dbType) {
@@ -26,96 +26,69 @@ class SQLAssistant {
      * Fix a SQL query based on error message.
      */
     async fix(sql, errorMessage) {
-        if (config.nlq?.provider && config.nlq.provider !== 'builtin') {
-            return await this._llmRequest(
-                `Fix this ${this.dbType} SQL query that produced an error.\n\nSQL:\n${sql}\n\nError:\n${errorMessage}\n\nDatabase schema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "fixed query", "explanation": "what was wrong and what was fixed"}`
-            );
-        }
-        return this._builtinFix(sql, errorMessage);
+        return this._withLLM(
+            `Fix this ${this.dbType} SQL query that produced an error.\n\nSQL:\n${sql}\n\nError:\n${errorMessage}\n\nDatabase schema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "fixed query", "explanation": "what was wrong and what was fixed"}`,
+            () => this._builtinFix(sql, errorMessage)
+        );
     }
 
     /**
      * Explain what a SQL query does in plain English.
      */
     async explain(sql) {
-        if (config.nlq?.provider && config.nlq.provider !== 'builtin') {
-            return await this._llmRequest(
-                `Explain this ${this.dbType} SQL query in plain English. Be concise but thorough.\n\nSQL:\n${sql}\n\nSchema context:\n${this.schemaContext}\n\nReturn JSON: {"explanation": "plain English explanation of what this query does, what tables it touches, and what the result will look like"}`
-            );
-        }
-        return this._builtinExplain(sql);
+        return this._withLLM(
+            `Explain this ${this.dbType} SQL query in plain English. Be concise but thorough.\n\nSQL:\n${sql}\n\nSchema context:\n${this.schemaContext}\n\nReturn JSON: {"explanation": "plain English explanation of what this query does, what tables it touches, and what the result will look like"}`,
+            () => this._builtinExplain(sql)
+        );
     }
 
     /**
      * Suggest optimizations for a SQL query.
      */
     async optimize(sql) {
-        if (config.nlq?.provider && config.nlq.provider !== 'builtin') {
-            return await this._llmRequest(
-                `Optimize this ${this.dbType} SQL query for better performance.\n\nSQL:\n${sql}\n\nSchema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "optimized query", "explanation": "what was optimized and why it's faster", "suggestions": ["index suggestion 1", "index suggestion 2"]}`
-            );
-        }
-        return this._builtinOptimize(sql);
+        return this._withLLM(
+            `Optimize this ${this.dbType} SQL query for better performance.\n\nSQL:\n${sql}\n\nSchema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "optimized query", "explanation": "what was optimized and why it's faster", "suggestions": ["index suggestion 1", "index suggestion 2"]}`,
+            () => this._builtinOptimize(sql)
+        );
     }
 
     /**
      * Generate SQL from natural language description.
      */
     async generate(description) {
-        if (config.nlq?.provider && config.nlq.provider !== 'builtin') {
-            return await this._llmRequest(
-                `Generate a ${this.dbType} SQL query for this request:\n\n"${description}"\n\nDatabase schema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "SELECT ...", "explanation": "what this query does"}`
-            );
-        }
-        return this._builtinGenerate(description);
+        return this._withLLM(
+            `Generate a ${this.dbType} SQL query for this request:\n\n"${description}"\n\nDatabase schema:\n${this.schemaContext}\n\nReturn JSON: {"sql": "SELECT ...", "explanation": "what this query does"}`,
+            () => this._builtinGenerate(description)
+        );
     }
 
-    // ── LLM Integration ──
+    // ── LLM Integration (via central provider, with builtin fallback) ──
 
-    async _llmRequest(prompt) {
+    /**
+     * Run a prompt through the configured LLM. If AI is disabled or the call
+     * fails, fall back to the builtin pattern-based implementation so the
+     * feature keeps working offline.
+     * @param {string} prompt
+     * @param {Function} builtinFn - returns the builtin result
+     */
+    async _withLLM(prompt, builtinFn) {
+        if (!(await aiProvider.isEnabled())) {
+            return builtinFn();
+        }
         try {
-            const provider = config.nlq.provider;
-            let text = '';
-
-            if (provider === 'bedrock') {
-                const bearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK;
-                const region = config.nlq?.region || 'us-east-1';
-                const model = config.nlq?.model || 'amazon.nova-lite-v1:0';
-
-                if (bearerToken) {
-                    const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/invoke`;
-                    let body;
-                    if (model.includes('claude') || model.includes('anthropic')) {
-                        body = JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] });
-                    } else {
-                        body = JSON.stringify({ messages: [{ role: 'user', content: [{ text: prompt }] }], inferenceConfig: { maxTokens: 1024, temperature: 0.1 } });
-                    }
-                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${bearerToken}` }, body });
-                    if (!response.ok) throw new Error(`Bedrock ${response.status}`);
-                    const data = await response.json();
-                    text = data.content?.[0]?.text || data.output?.message?.content?.[0]?.text || '';
-                }
-            } else if (provider === 'openai') {
-                const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` },
-                    body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_completion_tokens: 1024 })
-                });
-                const data = await response.json();
-                if (data.error) throw new Error(data.error.message);
-                text = data.choices?.[0]?.message?.content || '';
+            const result = await aiProvider.completeJSON(prompt);
+            // If parsing produced nothing useful, fall back.
+            if (!result || (result._raw !== undefined && !result.sql && !result.explanation)) {
+                const fallback = builtinFn();
+                fallback.explanation = (result._raw || fallback.explanation || '').toString().slice(0, 500) || fallback.explanation;
+                return fallback;
             }
-
-            // Parse JSON response
-            try {
-                const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                return JSON.parse(clean);
-            } catch (e) {
-                return { explanation: text, sql: '' };
-            }
+            return result;
         } catch (err) {
-            console.error('[SQL-Assistant] LLM error:', err.message);
-            return { error: 'AI unavailable: ' + err.message };
+            console.error('[SQL-Assistant] LLM error, using builtin fallback:', err.message);
+            const fallback = builtinFn();
+            fallback.aiError = err.message;
+            return fallback;
         }
     }
 

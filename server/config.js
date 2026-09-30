@@ -83,10 +83,13 @@ module.exports = {
         retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS) || 30
     },
 
-    // NLQ (Natural Language Query) — Text-to-SQL AI provider
+    // AI provider config (Text-to-SQL, SQL assistant, etc.)
+    // These are env-level defaults; admins can override them at runtime from the
+    // Settings UI (stored in app_settings and resolved by services/ai-provider).
+    // Leaving NLQ_MODEL unset lets ai-provider pick a sensible per-provider default.
     nlq: {
-        provider: process.env.NLQ_PROVIDER || 'builtin', // 'builtin', 'bedrock', 'openai'
-        model: process.env.NLQ_MODEL || 'anthropic.claude-3-haiku-20240307-v1:0',
+        provider: process.env.NLQ_PROVIDER || 'builtin', // 'builtin' | 'bedrock' | 'openai' | 'anthropic' | 'gemini'
+        model: process.env.NLQ_MODEL || '',
         region: process.env.NLQ_REGION || 'us-east-1',
         apiKey: process.env.NLQ_API_KEY || '',
         baseUrl: process.env.NLQ_BASE_URL || 'https://api.openai.com/v1'

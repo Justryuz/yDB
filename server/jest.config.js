@@ -8,6 +8,8 @@ module.exports = {
         'services/backup.js',
         'services/crypto.js',
         'services/ssrf-guard.js',
+        'services/ai-cache.js',
+        'services/ai-provider.js',
         'services/adapters/base.js',
         'services/adapters/ssl.js',
         'services/adapters/postgresql.js',

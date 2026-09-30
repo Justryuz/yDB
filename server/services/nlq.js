@@ -25,6 +25,7 @@ const { decrypt } = require('./crypto');
 const db = require('../db/pool');
 const poolManager = require('./pool-manager');
 const { withTunnel } = require('./ssh-tunnel');
+const aiProvider = require('./ai-provider');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 1: SEMANTIC CLASSIFICATION RULES
@@ -646,8 +647,10 @@ class NLQEngine {
         const planner = new QueryPlanner(question, si, dbType);
         const plan = planner.buildPlan();
 
-        // If builtin confidence is high enough, use it (instant)
-        if (plan.confidence >= 0.85 || !config.nlq?.provider || config.nlq.provider === 'builtin') {
+        // If builtin confidence is high enough, use it (instant). Also use it
+        // when no LLM provider is configured.
+        const aiOn = await aiProvider.isEnabled();
+        if (plan.confidence >= 0.85 || !aiOn) {
             return { sql: plan.sql || '', explanation: plan.explanation || '', chartType: plan.chartType || 'table', confidence: plan.confidence || 0.5, followUps: plan.followUps || [], provider: 'builtin' };
         }
 
@@ -683,14 +686,15 @@ class NLQEngine {
         // Step 3: Build comprehensive prompt
         const prompt = this._buildLLMPrompt(question, ddl, fewShotContext, dbType);
 
-        // Step 4: Call LLM
-        const provider = config.nlq?.provider;
-        let result;
-        if (provider === 'bedrock') result = await this._callBedrock(prompt);
-        else if (provider === 'openai') result = await this._callOpenAI(prompt);
-        else return { sql: '', explanation: 'Unknown LLM provider', chartType: 'table' };
-
-        return result;
+        // Step 4: Call the configured LLM through the central provider.
+        const parsed = await aiProvider.completeJSON(prompt, { maxTokens: 1024, temperature: 0.1 });
+        if (parsed && parsed.sql) {
+            return { sql: parsed.sql, explanation: parsed.explanation || '', chartType: parsed.chartType || 'table', confidence: 0.95 };
+        }
+        // Best-effort: pull a SELECT out of raw text if JSON parsing missed it.
+        const raw = parsed?._raw || '';
+        const m = raw.match(/SELECT[\s\S]*?(?:;|$)/i);
+        return { sql: m ? m[0].replace(/;$/, '') : '', explanation: (raw || '').slice(0, 200), chartType: 'table', confidence: m ? 0.6 : 0 };
     }
 
     /**
@@ -737,77 +741,6 @@ RULES:
 {"sql": "SELECT ...", "explanation": "Brief business-friendly explanation", "chartType": "table|bar|line|pie|number"}
 
 USER QUESTION: "${question}"`;
-    }
-
-    async _callBedrock(prompt) {
-        try {
-            const bearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK;
-            const region = config.nlq?.region || 'us-east-1';
-            const model = config.nlq?.model || 'anthropic.claude-3-haiku-20240307-v1:0';
-
-            if (bearerToken) {
-                // Use Bearer Token authentication (short-term API key from Amazon Q)
-                const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/invoke`;
-
-                // Build request body based on model provider
-                let body;
-                if (model.startsWith('anthropic.') || model.includes('claude')) {
-                    body = JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] });
-                } else {
-                    // Amazon Nova / Titan format
-                    body = JSON.stringify({ messages: [{ role: 'user', content: [{ text: prompt }] }], inferenceConfig: { maxTokens: 1024, temperature: 0.1 } });
-                }
-
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${bearerToken}`, 'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD' },
-                    body
-                });
-                if (!response.ok) {
-                    const err = await response.text();
-                    throw new Error(`Bedrock ${response.status}: ${err.substring(0, 200)}`);
-                }
-                const data = await response.json();
-
-                // Parse response based on model
-                let text = '';
-                if (data.content && data.content[0]?.text) {
-                    text = data.content[0].text; // Claude format
-                } else if (data.output?.message?.content?.[0]?.text) {
-                    text = data.output.message.content[0].text; // Nova format
-                } else if (data.results?.[0]?.outputText) {
-                    text = data.results[0].outputText; // Titan format
-                }
-                return this._parseAIResponse(text);
-            } else {
-                // Use standard AWS SDK credentials (IAM)
-                const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
-                const client = new BedrockRuntimeClient({ region });
-                const command = new InvokeModelCommand({ modelId: model, contentType: 'application/json', accept: 'application/json', body: JSON.stringify({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }) });
-                const response = await client.send(command);
-                return this._parseAIResponse(JSON.parse(new TextDecoder().decode(response.body)).content?.[0]?.text || '');
-            }
-        } catch (err) { console.error('[NLQ] Bedrock error:', err.message); return { sql: '', explanation: 'LLM error: ' + err.message, chartType: 'table' }; }
-    }
-
-    async _callOpenAI(prompt) {
-        try {
-            const response = await fetch(`${config.nlq?.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.nlq?.apiKey}` }, body: JSON.stringify({ model: config.nlq?.model || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_completion_tokens: 1024 }) });
-            const data = await response.json();
-            if (data.error) throw new Error(data.error.message || 'API error');
-            return this._parseAIResponse(data.choices?.[0]?.message?.content || '');
-        } catch (err) { console.error('[NLQ] OpenAI error:', err.message); return { sql: '', explanation: 'LLM error: ' + err.message, chartType: 'table' }; }
-    }
-
-    _parseAIResponse(text) {
-        try {
-            const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            const parsed = JSON.parse(clean);
-            return { sql: parsed.sql || '', explanation: parsed.explanation || '', chartType: parsed.chartType || 'table', confidence: 0.95 };
-        } catch (e) {
-            const m = text.match(/SELECT[\s\S]*?(?:;|$)/i);
-            return { sql: m ? m[0].replace(/;$/, '') : '', explanation: text.substring(0, 200), chartType: 'table', confidence: 0.6 };
-        }
     }
 
     _buildSchemaContext(schema) {
@@ -885,15 +818,19 @@ async function processQuestion(userId, connectionId, question) {
             lastError = err;
             console.error(`[NLQ] Query attempt ${attempt + 1} failed:`, err.message);
 
-            // Self-correction: if LLM is configured, retry with error context
-            if (attempt < MAX_RETRIES && config.nlq && config.nlq.provider !== 'builtin') {
+            // Self-correction: if an LLM is configured, retry with error context
+            if (attempt < MAX_RETRIES && (await aiProvider.isEnabled())) {
                 console.log('[NLQ] Attempting self-correction with error context...');
                 const correctionPrompt = `The previous SQL query failed with this error:\n\nSQL: ${generated.sql}\nError: ${err.message}\n\nPlease fix the query. Remember the database is ${conn.db_type}.\nSchema:\n${engine._buildDDL ? engine._buildDDL(schema, conn.db_type) : engine._buildSchemaContext(schema)}\n\nGenerate a corrected query. Respond in JSON: {"sql":"SELECT ...","explanation":"...","chartType":"table|bar|line|pie|number"}`;
 
                 try {
-                    const provider = config.nlq.provider;
-                    if (provider === 'bedrock') generated = await engine._callBedrock(correctionPrompt);
-                    else if (provider === 'openai') generated = await engine._callOpenAI(correctionPrompt);
+                    const parsed = await aiProvider.completeJSON(correctionPrompt);
+                    generated = {
+                        sql: parsed.sql || '',
+                        explanation: parsed.explanation || generated.explanation,
+                        chartType: parsed.chartType || 'table',
+                        confidence: 0.9
+                    };
 
                     // Validate corrected SQL
                     const reValidation = validateSQL(generated.sql);
