@@ -1,4 +1,5 @@
-FROM node:20-alpine
+# Debian-based image: native modules such as DuckDB need glibc (Alpine uses musl).
+FROM node:20-slim
 
 WORKDIR /app
 
@@ -7,7 +8,7 @@ COPY server/package.json server/package-lock.json* ./server/
 
 # Install dependencies
 WORKDIR /app/server
-RUN npm install --production
+RUN npm install --omit=dev
 
 # Copy all app files
 WORKDIR /app
@@ -19,9 +20,9 @@ RUN mkdir -p /app/backups
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s \
-  CMD wget --quiet --tries=1 --spider http://localhost:3000/metrics || exit 1
+# Health check (node is always present; slim images have no wget/curl)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD node -e "fetch('http://localhost:3000/metrics').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Entrypoint script handles first-run setup
 WORKDIR /app/server

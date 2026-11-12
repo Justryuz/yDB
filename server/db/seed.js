@@ -47,8 +47,7 @@ async function seed() {
         if (existing.rows.length > 0) {
             console.log('[SETUP] Admin user already exists. Skipping seed.');
             console.log('        If you need to reset the admin password, use: node db/reset-admin.js');
-            await pool.end();
-            return;
+            return; // pool is closed once in the finally block
         }
 
         // Generate random password

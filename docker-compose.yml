@@ -24,14 +24,20 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - generate with: openssl rand -hex 64}
+      - "JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required (generate with openssl rand -hex 64)}"
       - JWT_EXPIRES_IN=7d
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-}
+      - NLQ_PROVIDER=${NLQ_PROVIDER:-builtin}
+      - NLQ_MODEL=${NLQ_MODEL:-}
+      - NLQ_REGION=${NLQ_REGION:-us-east-1}
+      - NLQ_API_KEY=${NLQ_API_KEY:-}
+      - YDB_BLOCK_PRIVATE_HOSTS=${YDB_BLOCK_PRIVATE_HOSTS:-false}
       - PG_HOST=postgres
       - PG_PORT=5432
       - PG_USER=ydb
       - PG_PASSWORD=${PG_PASSWORD:?PG_PASSWORD is required}
       - PG_DATABASE=ydb_app
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required - generate with: openssl rand -hex 16}
+      - "ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (generate with openssl rand -hex 16)}"
       - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=info
       - BACKUP_TARGET=${BACKUP_TARGET:-local}
@@ -58,8 +64,7 @@ services:
       POSTGRES_DB: ydb_app
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No host port published: only the app container needs the database.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ydb"]
       interval: 5s
@@ -70,8 +75,7 @@ services:
   # ── Redis (Cache, Queue, Sessions) ──────────────────────
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port published: only the app container needs Redis.
     volumes:
       - redisdata:/data
     healthcheck:
